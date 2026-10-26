@@ -66,7 +66,8 @@
       location.hash = "#doc/" + encodeURIComponent(abs.slice(location.origin.length + 1)); return;
     }
     if (/^(mailto|tel):/i.test(u)) {
-      if (inTg) tg.openLink(absUrl("go.html") + "#" + encodeURIComponent(u)); else location.href = u;
+      // уникальный адрес каждый раз — иначе браузер Telegram показывает прошлый черновик
+      if (inTg) tg.openLink(absUrl("go.html") + "?t=" + Date.now() + "#" + encodeURIComponent(u)); else location.href = u;
       return;
     }
     if (inTg) tg.openLink(absUrl(u)); else window.open(absUrl(u), "_blank");
@@ -301,6 +302,24 @@
     if (body(16)) before(16, `<div class="btns"><a class="btn" href="#o/${id}/data">Контакт подрядчика</a></div>`);
     // 17 — дворник: объявление и вкладыш с данными объекта
     const dv = body(17) && body(17).querySelector(".btns"); if (dv) dv.insertAdjacentHTML("afterbegin", `<a class="btn main" href="#o/${id}/dvornik">Объявление и конверт</a>`);
+    // готовые письма из памятки: текст, копия на почту магазина
+    const mt = (to, subj, body) => `mailto:${to}?` + [o.store_email && "cc=" + o.store_email, "subject=" + encodeURIComponent(subj), "body=" + encodeURIComponent(body)].filter(Boolean).join("&");
+    const fa = (o.city ? "г. " + o.city + ", " : "") + (o.address || "");
+    const dirName = (o.director && o.director.name) || "________________";
+    const MAILS = {
+      "e.badeeva@": mt("e.badeeva@ya-retail.ru", "График Инкассации и Размена. Новое ОСП",
+        `Елена, добрый день!\n\nОткрывается новый магазин ${o.code}, ${fa}.\nДата приёмки — ${fmt(o.accept_date)}, дата открытия — ${fmt(o.open_date)}.\nПросьба сообщить дни инкассации и размена для нового ОСП.\n\nЗаранее благодарю!`),
+      "o.pavlovskaya@": mt("o.pavlovskaya@ya-retail.ru", "Заявка на доверенность и печать. Новый магазин и УМ",
+        `Ольга, добрый день!\n\nНовый магазин ${o.code}, ${fa}, открытие ${fmt(o.open_date)}.\nВ «Ярче Коммуникациях» созданы заявки на доверенность и печать для управляющего магазином: ${dirName}.\nПросьба взять в работу.\n\nЗаранее благодарю!`),
+    };
+    wrap.querySelectorAll('a[href^="mailto:"]').forEach((a) => { const k = Object.keys(MAILS).find((x) => a.getAttribute("href").includes(x)); if (k) a.setAttribute("href", MAILS[k]); });
+    // контакты: телефон и почта — кнопками «Позвонить» / «Написать»
+    wrap.querySelectorAll(".p .c").forEach((c) => {
+      const t = c.textContent.trim();
+      const digits = t.replace(/[^\d+]/g, "");
+      if (/@/.test(t)) c.outerHTML = `<a class="btn small" href="mailto:${t}?subject=${encodeURIComponent(o.code + " " + fa)}">✉ ${t}</a>`;
+      else if (digits.length >= 10) c.outerHTML = `<a class="btn small" href="tel:${digits}">📞 ${t}</a>`;
+    });
     // галки «Сделано» → сервер
     wrap.querySelectorAll("details.item").forEach((dt) => {
       const cb = dt.querySelector("label.done:last-of-type input"); cb.dataset.k = "m" + dt.dataset.id;
@@ -500,10 +519,10 @@
           return `<div class="it ${state || "un"}" data-k="${k}">
             <button class="mark" data-toggle="${k}" aria-label="Отметить">${state === "ok" ? "✓" : state === "bad" ? "!" : ""}</button>
             <span class="txt" data-toggle="${k}">${esc(t)}</span>
-            ${ref.length ? ref.map((r) => `<a class="who" href="#o/${id}/r/${r.id}" title="${esc(r.author)}">${esc(initials(r.author))}</a>`).join("") : ch ? `<span class="who ok" title="${esc(ch.by)}">${esc(initials(ch.by))}</span>` : ""}
+            ${ref.length ? ref.map((r) => `<a class="av" href="#o/${id}/r/${r.id}" title="${esc(r.author)}">${esc(initials(r.author))}</a>`).join("") : ch ? `<span class="av ok" title="${esc(ch.by)}">${esc(initials(ch.by))}</span>` : ""}
             <button class="addr" data-add="${k}" data-zone="${esc(z.zone)}" data-text="${esc(t)}" aria-label="Замечание по пункту">+ замеч.</button></div>`;
         }).join("")}
-        ${zrs.map((r) => `<a class="it rem" href="#o/${id}/r/${r.id}"><span class="mark bad">!</span><span class="txt">${esc(r.text)}</span><span class="who">${esc(initials(r.author_name))}</span></a>`).join("")}
+        ${zrs.map((r) => `<a class="it rem" href="#o/${id}/r/${r.id}"><span class="mark bad">!</span><span class="txt">${esc(r.text)}</span><span class="av">${esc(initials(r.author_name))}</span></a>`).join("")}
         ${complete ? "" : `<button class="small ghost allok" data-allok="${keys.join(",")}">Остальное в порядке</button>`}</div></details>`;
     }).join("");
   }
@@ -561,7 +580,7 @@
             <input inputmode="numeric" data-m="${i}" data-f="plan" value="${m.plan ?? ""}" placeholder="—"><input inputmode="numeric" data-m="${i}" data-f="fact" value="${m.fact ?? ""}" placeholder="—"></div>`; }).join("")}
         <button class="small ghost" id="addm" style="margin-top:8px">+ точка</button></div>
       <div class="card" style="flex-direction:row;align-items:center;justify-content:space-between"><span><b>Световой план · зал</b><br><span class="sub">светильников по плану / по факту</span></span>
-        <span class="row" style="gap:6px"><input class="num" inputmode="numeric" id="lp" value="${light.plan ?? ""}" placeholder="план"><input class="num" inputmode="numeric" id="lf" value="${light.fact ?? ""}" placeholder="факт"></span></div>
+        <span class="row" style="gap:6px"><input class="numin" inputmode="numeric" id="lp" value="${light.plan ?? ""}" placeholder="план"><input class="numin" inputmode="numeric" id="lf" value="${light.fact ?? ""}" placeholder="факт"></span></div>
       <div class="row sub"><b style="color:var(--fg)">Оборудование: ${s.done} из ${s.total}</b></div>
       ${zonesHtml(id, 2, "s2", C.stage2.map((z) => z.key === "e3" && +(C.survey.coffee || 1) === 2 ? { ...z, title: "Кофестанция · 2 модуля" } : z), C, rs)}
       <a class="btn main" href="#o/${id}/walk/3">Дальше: этап 3 — наличие</a>
@@ -627,7 +646,7 @@
       const m2 = ex.module2 || {};
       body = `<div class="card"><span class="title">Батареи и насосы</span>
           <div class="btns">${bat.map((g, i) => `<span class="chip info">${g.count} × ${g.sections} секц. <a href="#" data-delb="${i}" style="text-decoration:none">✕</a></span>`).join("")}</div>
-          <div class="row"><input class="num" inputmode="numeric" id="bc" placeholder="кол-во"><span>×</span><input class="num" inputmode="numeric" id="bs" placeholder="секций"><button class="small" id="addb">+ группа</button></div>
+          <div class="row"><input class="numin" inputmode="numeric" id="bc" placeholder="кол-во"><span>×</span><input class="numin" inputmode="numeric" id="bs" placeholder="секций"><button class="small" id="addb">+ группа</button></div>
           <span class="sub">В письмо уйдёт: ● КОЛИЧЕСТВО БАТАРЕЙ: ${esc(bat.map((g) => `${g.count}(${g.sections} СЕКЦ.)`).join("+") || "—")}</span>
           <div class="row"><span>Насосов (сололифтов)</span>${stepper(ex.pumps ?? 0, 'id="pumps"')}</div></div>
         <div class="card"><span class="title">Высоты</span><div class="grid2">

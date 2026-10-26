@@ -125,8 +125,8 @@ details.zone summary::-webkit-details-marker{display:none}
 .it.ok .mark{background:var(--ok);border:0;color:#fff}
 .it.bad .mark,.mark.bad{background:#c2410c;border:0;color:#fff}
 .it.un{background:color-mix(in oklab,var(--warn-soft) 70%,transparent);margin:0 -14px;padding-left:14px;padding-right:14px}
-.who{width:24px;height:24px;border-radius:12px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;display:grid;place-items:center;text-decoration:none;flex:none}
-.who.ok{background:var(--ok-soft);color:var(--ok)}
+.av{width:24px;height:24px;border-radius:12px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;display:grid;place-items:center;text-decoration:none;flex:none}
+.av.ok{background:var(--ok-soft);color:var(--ok)}
 .addr{min-height:30px;padding:0 8px;font-size:12px;border-radius:8px;border-color:var(--line);color:var(--warn)}
 .allok{margin-top:8px;align-self:flex-start}
 .fab{position:fixed;right:16px;bottom:calc(20px + env(safe-area-inset-bottom));height:56px;padding:0 20px;border-radius:28px;background:var(--accent);color:var(--on-accent);font-weight:600;font-size:16px;display:flex;align-items:center;text-decoration:none;box-shadow:0 6px 16px rgba(37,99,235,.35);z-index:6}
@@ -134,8 +134,8 @@ details.zone summary::-webkit-details-marker{display:none}
 /* этап 2 */
 .mrow{display:grid;grid-template-columns:34px minmax(0,1fr) 70px 70px;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line2)}
 .mrow.head{font-size:11px;font-weight:600;color:var(--muted);border-top:0}
-.mrow input,.num{padding:8px;font-weight:600;text-align:center}
-.num{width:76px}
+.mrow input,.numin{padding:8px;font-weight:600;text-align:center}
+.numin{width:76px}
 .pt{width:28px;height:28px;border-radius:14px;background:var(--bg);display:grid;place-items:center;font-weight:700;font-size:13px}
 .pt.ok{background:var(--ok-soft);color:var(--ok)}.pt.bad{background:var(--warn-soft);color:var(--warn)}
 .okt{color:var(--ok);font-weight:600;font-size:13px}.badt{color:#c2410c;font-weight:600;font-size:13px}
@@ -184,3 +184,4 @@ button.confirm{background:#15803d;border-color:#15803d}
 #app:has(#doc){max-width:none;padding:0}
 #doc{height:100vh;height:100dvh}
 .docback{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom));background:var(--fg);color:var(--card);padding:10px 16px;border-radius:999px;font-weight:600;text-decoration:none;z-index:9}
+.p .btn.small{min-height:34px;padding:0 10px;font-size:13px}

@@ -78,10 +78,12 @@ def whatsapp_group_name(obj: StoreObject) -> str:
 
 
 def mailto(to: str | list[str], subject: str, body: str = "", cc: str = "") -> str:
-    to_s = ";".join(to) if isinstance(to, list) else to
+    # адреса через запятую без пробелов и без кодирования «@» и «,» — так их понимают Почта iPhone, Outlook и Gmail
+    norm = lambda v: ",".join(x.strip() for x in (v if isinstance(v, list) else str(v).replace(";", ",").split(",")) if x.strip())
+    to_s = quote(norm(to), safe="@,.")
     q = [f"subject={quote(subject)}"]
     if cc:
-        q.append(f"cc={quote(cc)}")
+        q.append(f"cc={quote(norm(cc), safe='@,.')}")
     if body:
         q.append(f"body={quote(body)}")
     return f"mailto:{to_s}?" + "&".join(q)
