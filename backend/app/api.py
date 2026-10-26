@@ -292,7 +292,12 @@ class Api:
         if lst not in norms_mod.LISTS:
             raise ValueError("список: mto, hoz или coffee")
         cur = o.delivery.setdefault(lst, {})
-        if "all" in data:                      # «всё пришло» / «сбросить» по списку
+        if "missing" in data:                  # пакетом: {n: сколько к довозу}; 0 — пришло полностью
+            norm = {str(it["n"]): it["norm"] for it in norms_mod.norms(o)[lst]}
+            for n, miss in data["missing"].items():
+                if norm.get(str(n)) is not None:
+                    cur[str(n)] = max(0, norm[str(n)] - max(0, int(miss or 0)))
+        elif "all" in data:                    # «всё пришло» / «сбросить» по списку
             for it in norms_mod.norms(o)[lst]:
                 if it["norm"] is not None:
                     cur[str(it["n"])] = it["norm"] if data["all"] else 0

@@ -58,7 +58,9 @@ def shortages(obj: StoreObject) -> dict[str, list[dict]]:
         for it in items:
             if it["norm"] is None:
                 continue
-            have = int((got.get(lst) or {}).get(str(it["n"]), 0) or 0)
+            # по умолчанию позиция пришла полностью; недовоз отмечают снятием галочки
+            v = (got.get(lst) or {}).get(str(it["n"]))
+            have = it["norm"] if v is None else int(v or 0)
             miss = it["norm"] - have
             if miss > 0:
                 rows.append({**it, "have": have, "missing": miss})

@@ -46,6 +46,12 @@
     }
     if (inTg) tg.openLink(absUrl(u)); else window.open(absUrl(u), "_blank");
   }
+  document.addEventListener("focusin", (e) => {
+    if (!e.target.matches("input:not([type=checkbox]):not([type=file]), textarea, select")) return;
+    document.body.classList.add("kb");
+    setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 350);
+  });
+  document.addEventListener("focusout", () => setTimeout(() => { if (!document.activeElement || !document.activeElement.matches("input, textarea, select")) document.body.classList.remove("kb"); }, 100));
   document.addEventListener("click", (e) => {
     const a = e.target.closest("a[href]");
     if (!a) return;
@@ -55,6 +61,7 @@
   });
 
   function top(o) {
+    $top.hidden = false;
     // o: {back:[href,text], cap, title, right, tabs:[id,active], extra}
     $top.innerHTML = `<div class="in ${o.tabs ? "" : "pad"}">
       ${o.back ? `<a class="back" href="${o.back[0]}">← ${esc(o.back[1])}</a>` : ""}
@@ -62,13 +69,19 @@
       <div class="hrow"><h1>${esc(o.title)}</h1>${o.right || ""}</div>
       ${o.extra || ""}
       ${o.tabs ? tabs(o.tabs[0], o.tabs[1]) : ""}</div>`;
+    requestAnimationFrame(() => document.documentElement.style.setProperty("--topH", $top.offsetHeight + "px"));
   }
   function tabs(id, on) {
     const t = [["prep", "Подготовка", `#o/${id}`], ["walk", "Обход", `#o/${id}/walk/1`], ["letter", "Письмо", `#o/${id}/letter/first`], ["data", "Данные", `#o/${id}/data`], ["instr", "Инструкции", `#o/${id}/instr`]];
     return `<nav class="tabs">${t.map(([k, n, h]) => `<a href="${h}" class="${k === on ? "on" : ""}">${n}</a>`).join("")}</nav>`;
   }
   const objLine = (o) => `${o.code}${o.city ? " · " + o.city : ""}${o.address ? ", " + o.address : ""}`;
-  function render(html) { $app.innerHTML = html; window.scrollTo(0, 0); }
+  let lastRoute = "";
+  function render(html) {
+    const same = lastRoute === location.hash, y = window.scrollY;
+    $app.innerHTML = html; lastRoute = location.hash;
+    window.scrollTo(0, same ? y : 0);          // перерисовка того же экрана не прыгает наверх
+  }
   function fail(e) {
     top({ title: "Не получилось" });
     render(`<div class="card"><span class="sub">${esc(e.message)}</span>
@@ -461,7 +474,7 @@
             <button class="mark" data-toggle="${k}" aria-label="Отметить">${state === "ok" ? "✓" : state === "bad" ? "!" : ""}</button>
             <span class="txt" data-toggle="${k}">${esc(t)}</span>
             ${ref.length ? ref.map((r) => `<a class="who" href="#o/${id}/r/${r.id}" title="${esc(r.author)}">${esc(initials(r.author))}</a>`).join("") : ch ? `<span class="who ok" title="${esc(ch.by)}">${esc(initials(ch.by))}</span>` : ""}
-            <button class="addr" data-add="${k}" data-zone="${esc(z.zone)}" data-text="${esc(t)}" aria-label="Замечание по пункту">+!</button></div>`;
+            <button class="addr" data-add="${k}" data-zone="${esc(z.zone)}" data-text="${esc(t)}" aria-label="Замечание по пункту">+ замеч.</button></div>`;
         }).join("")}
         ${zrs.map((r) => `<a class="it rem" href="#o/${id}/r/${r.id}"><span class="mark bad">!</span><span class="txt">${esc(r.text)}</span><span class="who">${esc(initials(r.author_name))}</span></a>`).join("")}
         ${complete ? "" : `<button class="small ghost allok" data-allok="${keys.join(",")}">Остальное в порядке</button>`}</div></details>`;
@@ -493,7 +506,7 @@
     render(`${surveyBanner(o, C, id)}
       <div class="row sub"><b style="color:var(--fg)">Проверено ${s.done} из ${s.total} пунктов</b>${s.total - s.done ? `<span style="color:var(--warn);font-weight:600">${s.total - s.done} не проверено</span>` : `<span style="color:var(--ok);font-weight:600">всё проверено</span>`}</div>
       <div class="bar"><i style="width:${(s.done / s.total) * 100}%"></i></div>
-      <span class="sub">Касание пункта — «в порядке» ✓. «+!» — замечание по пункту. Непроверенные подсвечены.</span>
+      <span class="sub">Касание пункта — «в порядке» ✓ (повторное — снять). «+ замеч.» — замечание по пункту. Непроверенные подсвечены.</span>
       ${zonesHtml(id, 1, "s1", C.stage1, C, rs)}
       ${s.total - s.done ? "" : `<a class="btn main" href="#o/${id}/walk/2">Дальше: этап 2 — оборудование</a>`}
       ${fab(`#o/${id}/rnew/1/0`)}`);
@@ -541,7 +554,7 @@
 
   // ---------- этап 3: недовозы, статусы, батареи, фото ----------
   const LISTS = { mto: "МТО", hoz: "Хоз", coffee: "Кофе" };
-  let S3 = { tab: "mto", q: "", onlyMiss: false };
+  let S3 = { tab: "mto", q: "", mark: false };
   async function stage3(id) {
     const [o, N, C] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/norms`), api("GET", `/api/objects/${id}/checklists`)]);
     const cnt = (l) => (N.shortages[l] || []).length;
@@ -550,21 +563,30 @@
       <button class="chipb ${S3.tab === "st" ? "on" : ""}" data-tab="st">Статусы ●</button><button class="chipb ${S3.tab === "more" ? "on" : ""}" data-tab="more">Батареи и фото</button></div>`;
     let body = "";
     if (LISTS[S3.tab]) {
-      const got = N.delivery[S3.tab] || {};
-      let rows = N.norms[S3.tab];
-      if (S3.q) rows = rows.filter((x) => (x.n + ". " + x.name).toLowerCase().includes(S3.q.toLowerCase()));
-      if (S3.onlyMiss) rows = rows.filter((x) => x.norm !== null && (+got[x.n] || 0) < x.norm);
-      body = `${N.survey_missing.length && S3.tab === "mto" ? `<a class="card warnc" href="#o/${id}/survey"><b>Нет данных опроса:</b> ${esc(N.survey_missing.join(", "))} — нормы по этим позициям не посчитаны</a>` : ""}
-        <input id="q" placeholder="Поиск: сетка, ограничитель, 76…" value="${esc(S3.q)}">
-        <div class="row"><label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="om" ${S3.onlyMiss ? "checked" : ""}> Только недовоз</label>
-          <span class="btns"><button class="small" id="all1">Всё пришло</button><button class="small ghost" id="all0">Сбросить</button></span></div>
-        <div class="card" style="gap:0;padding:4px 14px">${rows.map((x) => {
-          const have = +got[x.n] || 0, miss = x.norm === null ? null : Math.max(0, x.norm - have);
-          return `<div class="drow ${miss ? "miss" : miss === 0 ? "full" : ""}">
-            <input type="checkbox" data-full="${x.n}" ${miss === 0 ? "checked" : ""} ${x.norm === null ? "disabled" : ""} aria-label="Пришло полностью">
-            <span class="t"><b>${x.n}. ${esc(x.name)}</b><span>${x.norm === null ? "норма — по опросу" : `норма ${x.norm}${x.note ? " (" + esc(x.note) + ")" : ""} · ${miss ? `<span style="color:var(--warn);font-weight:600">недовоз ${miss}</span>` : "всё на месте"}`}</span></span>
-            ${x.norm === null ? "" : stepper(have, `data-n="${x.n}" data-norm="${x.norm}"`)}</div>`; }).join("") || `<div class="empty">Ничего не найдено</div>`}</div>
-        <span class="sub">Галочка — пришло полностью. Если пришло частично — укажите сколько, недовоз посчитается сам.</span>`;
+      const short = Object.fromEntries((N.shortages[S3.tab] || []).map((x) => [x.n, x.missing]));
+      const rows = N.norms[S3.tab];
+      const qty = (n, v) => `<span class="qty"><button type="button" data-q="-1">−</button><input inputmode="numeric" pattern="[0-9]*" data-qn="${n}" value="${v}" aria-label="К довозу"><button type="button" data-q="1">+</button></span>`;
+      const search = `<div class="sticky-search"><input id="q" type="search" placeholder="Поиск по названию: сетка, ограничитель, 76…" value="${esc(S3.q)}"></div>`;
+      const surveyWarn = N.survey_missing.length && S3.tab === "mto" ? `<a class="card warnc" href="#o/${id}/survey"><b>Нет данных опроса:</b> ${esc(N.survey_missing.join(", "))} — нормы по этим позициям не посчитаны</a>` : "";
+      if (!S3.mark) {
+        const list = rows.filter((x) => short[x.n]);
+        body = `${surveyWarn}${search}
+          ${list.length ? `<span class="sub">К довозу — ${list.length} поз. Количество можно ввести цифрами или кнопками. Остальное пришло полностью.</span>
+            <div class="card" style="gap:0;padding:4px 14px">${list.map((x) => `<div class="drow miss" data-name="${esc((x.n + ". " + x.name).toLowerCase())}">
+              <span class="t"><b>${x.n}. ${esc(x.name)}</b><span>норма ${x.norm}${x.note ? " (" + esc(x.note) + ")" : ""} · к довозу</span></span>${qty(x.n, short[x.n])}
+              <button class="small ghost gotit" data-got="${x.n}" aria-label="Пришло полностью">✓</button></div>`).join("")}</div>`
+          : `<div class="card" style="border-color:var(--ok)"><b style="color:var(--ok)">✓ Всё пришло по нормам</b><span class="sub">Если чего-то нет — отметьте недовоз</span></div>`}
+          <button class="main" id="markMode">Отметить недовоз галочками</button>`;
+      } else {
+        body = `${surveyWarn}${search}
+          <span class="sub">Снимите галочку с того, что не пришло — строка загорится и появится количество к довозу (по умолчанию вся норма). Потом «Подтвердить».</span>
+          <div class="card" style="gap:0;padding:4px 14px">${rows.map((x) => { const miss = short[x.n] || 0;
+            return `<div class="drow ${miss ? "miss" : ""}" data-name="${esc((x.n + ". " + x.name).toLowerCase())}" data-row="${x.n}" data-norm="${x.norm ?? ""}">
+              <input type="checkbox" data-pick="${x.n}" ${miss ? "" : "checked"} ${x.norm === null ? "disabled" : ""} aria-label="Пришло">
+              <span class="t"><b>${x.n}. ${esc(x.name)}</b><span>${x.norm === null ? "норма — по опросу" : "норма " + x.norm + (x.note ? " (" + esc(x.note) + ")" : "")}</span></span>
+              ${x.norm === null ? "" : `<span class="pickq" ${miss ? "" : "hidden"}>${qty(x.n, miss || x.norm)}</span>`}</div>`; }).join("")}</div>
+          <div class="bottom" style="display:grid;grid-template-columns:1fr 2fr;gap:8px"><button id="markCancel">Отмена</button><button class="main" id="markOk">Подтвердить</button></div>`;
+      }
     } else if (S3.tab === "st") {
       const st = C.state || {};
       body = `<span class="sub">Зелёным — в порядке, оранжевым — критично исправить. «Нет» — пункт не актуален для помещения, в письмо не идёт.</span>
@@ -592,24 +614,43 @@
         <div class="card"><span class="title">Лист готовности (АХЧ)</span><span class="sub">Ссылка на скан — для первого письма</span><input id="ahs" value="${esc(ex.ahch_scan || "")}" placeholder="https://disk.yandex.ru/…"></div>`;
     }
     render(tabsH + body + `<a class="btn main" href="#o/${id}/letter/first">К письму →</a>`);
-    $app.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { S3.tab = b.dataset.tab; stage3(id); }));
-    const q = document.getElementById("q"); if (q) q.oninput = () => { S3.q = q.value; clearTimeout(q.t); q.t = setTimeout(() => stage3(id).then(() => { const x = document.getElementById("q"); x.focus(); x.setSelectionRange(99, 99); }), 400); };
-    const om = document.getElementById("om"); if (om) om.onchange = () => { S3.onlyMiss = om.checked; stage3(id); };
-    const setAll = async (v) => { await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, all: v }); stage3(id); };
-    if (document.getElementById("all1")) { document.getElementById("all1").onclick = () => setAll(true); document.getElementById("all0").onclick = () => setAll(false); }
-    $app.querySelectorAll("[data-full]").forEach((c) => (c.onchange = async () => {
-      const row = c.closest(".drow"), st = row.querySelector(".stepper");
-      await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, n: c.dataset.full, have: c.checked ? +st.dataset.norm : 0 }); stage3(id);
+    $app.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { S3.tab = b.dataset.tab; S3.mark = false; stage3(id); }));
+    // поиск — мгновенно, без перерисовки экрана
+    const q = document.getElementById("q");
+    const filt = () => { const v = (q.value || "").toLowerCase().trim(); S3.q = q.value; $app.querySelectorAll("[data-name]").forEach((r) => (r.hidden = !!v && !r.dataset.name.includes(v))); };
+    if (q) { q.oninput = filt; filt(); }
+    // количество к довозу: цифрами или ±; сохраняется в фоне, экран не прыгает
+    const saveMiss = (n, v) => api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, missing: { [n]: v } }).catch((e) => toast(e.message));
+    $app.querySelectorAll(".qty").forEach((box) => {
+      const inp = box.querySelector("input");
+      const commit = () => { const v = Math.max(0, parseInt(inp.value, 10) || 0); inp.value = v; if (!S3.mark) { clearTimeout(inp.t); inp.t = setTimeout(() => saveMiss(inp.dataset.qn, v), 500); } };
+      box.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => { inp.value = Math.max(0, (parseInt(inp.value, 10) || 0) + +b.dataset.q); commit(); }));
+      inp.oninput = commit;
+    });
+    $app.querySelectorAll("[data-got]").forEach((b) => (b.onclick = async () => { const row = b.closest(".drow"); row.style.opacity = ".4"; await saveMiss(b.dataset.got, 0); row.remove(); toast("Отмечено: пришло"); }));
+    const mm = document.getElementById("markMode"); if (mm) mm.onclick = () => { S3.mark = true; stage3(id); };
+    $app.querySelectorAll("[data-pick]").forEach((c) => (c.onchange = () => {
+      const row = c.closest(".drow"); row.classList.toggle("miss", !c.checked); row.querySelector(".pickq").hidden = c.checked;
     }));
-    $app.querySelectorAll(".stepper[data-n]").forEach((st) => st.querySelectorAll("button").forEach((b) => (b.onclick = async () => {
-      const v = Math.max(0, +st.querySelector("b").textContent + +b.dataset.d); st.querySelector("b").textContent = v;
-      clearTimeout(st.t); st.t = setTimeout(async () => { await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, n: st.dataset.n, have: v }); stage3(id); }, 600);
-    })));
+    const mk = document.getElementById("markOk");
+    if (mk) {
+      document.getElementById("markCancel").onclick = () => { S3.mark = false; stage3(id); };
+      mk.onclick = async () => {
+        const missing = {};
+        $app.querySelectorAll("[data-row]").forEach((row) => { if (!row.dataset.norm) return; const c = row.querySelector("[data-pick]");
+          missing[row.dataset.row] = c.checked ? 0 : Math.max(0, parseInt(row.querySelector(".qty input").value, 10) || 0); });
+        await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, missing }); S3.mark = false; toast("Недовоз сохранён"); stage3(id);
+      };
+    }
     $app.querySelectorAll("[data-st]").forEach((card) => {
       const key = card.dataset.st, ta = card.querySelector("textarea");
       const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }; fit();
       ta.oninput = fit; ta.onchange = () => api("PUT", `/api/objects/${id}/statuses`, { key, text: ta.value });
-      card.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = async () => { await api("PUT", `/api/objects/${id}/statuses`, { key, state: b.dataset.sv, text: "" }); stage3(id); }));
+      card.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = async () => {
+        card.className = "card stc " + b.dataset.sv; card.querySelectorAll("[data-sv]").forEach((x) => x.classList.toggle("on", x === b));
+        const it = C.statuses.find((x) => x.key === key); if (it) { ta.value = b.dataset.sv === "bad" ? it.bad : it.ok; fit(); }
+        await api("PUT", `/api/objects/${id}/statuses`, { key, state: b.dataset.sv, text: "" });
+      }));
     });
     const ex = C.extras || {};
     const addb = document.getElementById("addb");
@@ -636,7 +677,7 @@
     const s = N.survey;
     const mto = Object.fromEntries(N.norms.mto.map((x) => [x.n, x.norm]));
     top({ back: [`#o/${id}/walk/1`, "Обход"], cap: objLine(o), title: "Опрос перед приёмкой", extra: `<span class="sub">От ответов считаются нормы недовоза и пункты письма</span>` });
-    const num = (k, t, sub) => `<div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><span><b style="font-weight:500">${t}</b><br><span class="sub">${sub}</span></span>${stepper(s[k] ?? 0, `data-k="${k}"`)}</div>`;
+    const num = (k, t, sub) => `<div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><span><b style="font-weight:500">${t}</b><br><span class="sub">${sub}</span></span><span class="qty" data-k="${k}"><button type="button" data-q="-1">−</button><input inputmode="numeric" pattern="[0-9]*" value="${s[k] ?? ""}" placeholder="0"><button type="button" data-q="1">+</button></span></div>`;
     const tog = (k, t) => `<label class="row" style="padding:10px 0;border-top:1px solid var(--line2)"><span>${t}</span><input type="checkbox" data-b="${k}" ${s[k] ? "checked" : ""} style="width:22px;height:22px;accent-color:var(--accent)"></label>`;
     render(`<div class="card"><span class="title" style="font-size:14px">Кофемашин</span>${segHtml("coffee", ["1 · обычная КС", "2 · двойная КС"], +s.coffee === 2 ? "2 · двойная КС" : "1 · обычная КС")}</div>
       <div class="card" style="gap:0">${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
@@ -646,10 +687,12 @@
       <div class="bottom"><a class="btn main" href="#o/${id}/walk/1">Начать обход</a></div>`);
     const save = async (patch) => { await api("PUT", `/api/objects/${id}/survey`, patch); surveyScreen(id); };
     bindSeg("coffee", (v) => save({ coffee: v.startsWith("2") ? 2 : 1 }));
-    $app.querySelectorAll(".stepper[data-k]").forEach((st) => st.querySelectorAll("button").forEach((b) => (b.onclick = () => {
-      const v = Math.max(0, +st.querySelector("b").textContent + +b.dataset.d); st.querySelector("b").textContent = v;
-      clearTimeout(st.t); st.t = setTimeout(() => save({ [st.dataset.k]: v }), 500);
-    })));
+    $app.querySelectorAll(".qty[data-k]").forEach((box) => {
+      const inp = box.querySelector("input");
+      const commit = () => { const v = Math.max(0, parseInt(inp.value, 10) || 0); clearTimeout(box.t); box.t = setTimeout(() => save({ [box.dataset.k]: v }), 700); };
+      box.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => { inp.value = Math.max(0, (parseInt(inp.value, 10) || 0) + +b.dataset.q); commit(); }));
+      inp.oninput = commit;
+    });
     $app.querySelectorAll("[data-b]").forEach((c) => (c.onchange = () => save({ [c.dataset.b]: c.checked })));
   }
 
@@ -699,7 +742,7 @@
         <div class="row sub"><span>${r.section === "equip" ? "ОБОРУДОВАНИЕ" : "СТРОЙКА"} · №${r.n}${r.deadline ? " · срок " + fmtShort(r.deadline) : ""}</span><span class="chip ${r.status === "fixed" ? "warn" : "info"}">${r.status === "fixed" ? "исправлено" : "открыто"}</span></div>
         <a href="#o/${id}/r/${r.id}" style="color:inherit;text-decoration:none">${esc(r.text)}</a>
         ${r.comments.map((c) => `<span class="sub" style="color:${c.color || "var(--muted)"}">– ${esc(c.text)} <i>(${esc(c.author)})</i></span>`).join("")}
-        <div class="btns">${r.status === "open" ? `<button class="small" data-st="fixed">Исправлено</button>` : ""}<button class="small main" data-st="accepted">✓ Принято</button></div>
+        <div class="actions2">${r.status === "open" ? `<button data-st="fixed">Исправлено</button>` : `<span></span>`}<button class="main" data-st="accepted" data-confirm="1">✓ Принято</button></div>
         <details><summary class="sub" style="cursor:pointer">+ комментарий из ветки</summary>
           <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px"><select data-ca><option value="">Прогресс / новый срок — оранжевым</option>${COMMENT_AUTHORS.map((a) => `<option>${a}</option>`).join("")}${o.coordinator.name ? `<option>${esc(o.coordinator.name)}</option>` : ""}</select>
           <textarea rows="2" data-ct placeholder="(сегодня сделают)"></textarea><button class="small" data-cadd>Добавить</button></div></details></div>`).join("") || `<div class="empty">Открытых пунктов нет</div>`}
@@ -728,7 +771,10 @@
       document.getElementById("noch").onchange = async (e) => { await api("PUT", `/api/objects/${id}/extras`, { nochange: e.target.checked }); letterScreen(id, mode); };
       $app.querySelectorAll(".upd").forEach((card) => {
         const rid = card.dataset.rid;
-        card.querySelectorAll("[data-st]").forEach((b) => (b.onclick = async () => { try { await api("POST", `/api/objects/${id}/remarks/${rid}/status`, { status: b.dataset.st }); letterScreen(id, mode); } catch (e) { toast(e.message); } }));
+        card.querySelectorAll("[data-st]").forEach((b) => (b.onclick = async () => {
+          if (b.dataset.confirm === "1") { b.dataset.confirm = "2"; b.textContent = "Точно принято? Нажмите ещё раз"; b.classList.add("confirm"); setTimeout(() => { if (b.isConnected) { b.dataset.confirm = "1"; b.textContent = "✓ Принято"; b.classList.remove("confirm"); } }, 3500); return; }
+          try { await api("POST", `/api/objects/${id}/remarks/${rid}/status`, { status: b.dataset.st }); letterScreen(id, mode); } catch (e) { toast(e.message); }
+        }));
         card.querySelector("[data-cadd]").onclick = async () => {
           const a = card.querySelector("[data-ca]").value, t = card.querySelector("[data-ct]").value.trim(); if (!t) return;
           await api("POST", `/api/objects/${id}/remarks/${rid}/comment`, a ? { author: a, text: t } : { text: t, progress: true }); letterScreen(id, mode);
@@ -833,13 +879,14 @@
 
   // ---------- инструкция внутри приложения ----------
   function docScreen(path) {
-    top({ back: ["javascript:history.back()", "Назад"], title: "Инструкция" });
-    $app.innerHTML = `<iframe id="doc" src="${esc(path)}" title="Инструкция" allow="clipboard-write; web-share"></iframe>`;
+    $top.innerHTML = ""; $top.hidden = true;          // своя стеклянная панель страницы сверху — без нашей шапки
+    $app.innerHTML = `<iframe id="doc" src="${esc(path)}" title="Инструкция" allow="clipboard-write; web-share"></iframe>
+      ${tg && tg.BackButton && inTg ? "" : `<a class="docback" href="javascript:history.back()">← Назад</a>`}`;
+    lastRoute = location.hash;
     const fr = document.getElementById("doc");
     fr.onload = () => {
       try {
         const d = fr.contentDocument;
-        const h1 = d.title || ""; if (h1) $top.querySelector("h1").textContent = h1.replace(/\s+[—-]\s+.*$/, "");
         d.addEventListener("click", (e) => {
           const a = e.target.closest("a[href]"); if (!a) return;
           const href = a.getAttribute("href");

@@ -63,6 +63,17 @@ def first_last(name: str) -> str:
     return name
 
 
+def person_email(name: str, obj: StoreObject) -> str:
+    """Почта человека: люди объекта, затем справочник контактов (по совпадению ФИО или фамилии и имени)."""
+    for p in (obj.coordinator, obj.director, obj.dev_manager, obj.mops_contractor):
+        if p.name and p.email and (p.name == name or p.name.split()[:2] == name.split()[:2]):
+            return p.email
+    for c in json.loads((ASSETS / "contacts.json").read_text(encoding="utf-8")):
+        if c.get("email") and (c["fio"] == name or c["fio"].split()[:2] == name.split()[:2]):
+            return c["email"]
+    return ""
+
+
 def recipients(obj: StoreObject) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[str]]:
     """Кому — Жихарева; копия — по шаблону, с учётом округа и фреш-полки. Возвращает (to, cc, без почты)."""
     s = survey(obj)
@@ -187,9 +198,14 @@ def remark_line(n: int, r: Remark, obj: StoreObject, mode: str) -> tuple[str, st
         if who_h:
             tail_h += f" – {who_h}"; tail_t += f" – {who_t}"
     elif r.deadline_ask:
-        line = f"; Срок — уточните у {first_last(r.deadline_ask)}"
-        tail_h += color(esc(line), ORANGE); tail_t += line
-        if who_h:
+        # как в цепочках писем: тегаем человека и спрашиваем срок
+        ask = r.deadline_ask.strip()
+        mail = person_email(ask, obj)
+        nm = ask.split()[1] if len(ask.split()) > 1 else ask
+        tag_h = f'<a href="mailto:{esc(mail)}">@{esc(ask)}</a>' if mail else f"@{esc(ask)}"
+        tail_h += f"; {tag_h} {esc(nm)}, подскажи, пожалуйста, срок исправления"
+        tail_t += f"; @{ask} {nm}, подскажи, пожалуйста, срок исправления"
+        if who_h and r.responsible != ask:
             tail_h += f" – {who_h}"; tail_t += f" – {who_t}"
     if r.status == "fixed_on_site" and mode == "first":
         tail_h += color(" – устранено в ходе приёмки", GREEN); tail_t += " – устранено в ходе приёмки"
