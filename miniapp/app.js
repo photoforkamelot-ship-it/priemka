@@ -27,7 +27,32 @@
     if (!r.ok) throw new Error((data && data.error) || "ошибка " + r.status);
     return data;
   }
-  function toast(t) { const el = document.getElementById("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2400); }
+  // ---------- отклик: вибрация (Telegram) и короткий звук ----------
+  const HAP = tg && tg.HapticFeedback;
+  let soundOn = true; try { soundOn = localStorage.getItem("sound") !== "off"; } catch (e) {}
+  let AC = null;
+  function tone(notes) {
+    if (!soundOn) return;
+    try {
+      AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+      if (AC.state === "suspended") AC.resume();
+      let t = AC.currentTime;
+      notes.forEach(([f, d, v]) => {
+        const o = AC.createOscillator(), g = AC.createGain();
+        o.type = "sine"; o.frequency.value = f; g.gain.setValueAtTime(v || 0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+        o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d); t += d * 0.8;
+      });
+    } catch (e) {}
+  }
+  const fx = {
+    tap() { HAP ? HAP.selectionChanged() : navigator.vibrate && navigator.vibrate(8); tone([[1400, 0.025, 0.035]]); },
+    nav() { HAP ? HAP.impactOccurred("light") : navigator.vibrate && navigator.vibrate(12); tone([[700, 0.05, 0.03], [1050, 0.06, 0.03]]); },
+    ok() { HAP ? HAP.notificationOccurred("success") : navigator.vibrate && navigator.vibrate([10, 40, 10]); tone([[880, 0.07, 0.05], [1320, 0.11, 0.05]]); },
+    err() { HAP ? HAP.notificationOccurred("error") : navigator.vibrate && navigator.vibrate([30, 40, 30]); tone([[260, 0.16, 0.06]]); },
+  };
+  document.addEventListener("pointerdown", (e) => { if (e.target.closest("button, a, summary, label, input[type=checkbox], select")) fx.tap(); }, { capture: true, passive: true });
+  function toast(t, kind) { (kind === "err" || /ошибк|не удалось|нельзя|нет доступа|не найден|нужн|укажите|выберите/i.test(t) ? fx.err : /загружаю|проверяю/i.test(t) ? () => {} : fx.ok)();
+    const el = document.getElementById("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2400); }
   async function copy(t) {
     try { await navigator.clipboard.writeText(t); toast("Скопировано"); }
     catch (e) { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("Скопировано"); } catch (_) { toast("Выделите текст и скопируйте"); } ta.remove(); }
@@ -100,6 +125,7 @@
   }
   async function objects() {
     const list = await api("GET", "/api/objects");
+    setTimeout(() => { const c = document.getElementById("snd"); if (c) c.onchange = () => { soundOn = c.checked; try { localStorage.setItem("sound", soundOn ? "on" : "off"); } catch (e) {} if (soundOn) fx.ok(); }; }, 0);
     top({ cap: "Команда открытия", title: "Мои объекты", right: `<a class="btn small main" href="#new">+ Объект</a>` });
     render(`${list.length ? "" : `<div class="empty"><b>Объектов пока нет</b><span>Создайте объект — данные подставятся в письма, заявки, объявление и конверт.</span><a class="btn main" href="#new">+ Новый объект</a></div>`}
       ${list.map((o) => `<a class="card" href="#o/${o.id}">
@@ -110,6 +136,7 @@
         <div class="row sub"><span>Подготовка ${o.firstday_done} из ${o.firstday_total}</span><span style="color:var(--link);font-weight:600">Открыть →</span></div>
         <div class="bar"><i style="width:${(o.firstday_done / o.firstday_total) * 100}%"></i></div></a>`).join("")}
       <div class="group">Справка</div>
+      <label class="card tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="snd" ${soundOn ? "checked" : ""}> Звук нажатий и сохранений (вибрация — всегда)</label>
       <div class="list"><a href="#instr"><span class="t"><b>Инструкции</b><span>МК, ЯК, ЛМК, приём на работу, форма, дворник, покупюрник</span></span><span class="go">›</span></a></div>`);
   }
 
@@ -926,6 +953,6 @@
       await objects();
     } catch (e) { fail(e); }
   }
-  window.addEventListener("hashchange", route);
+  window.addEventListener("hashchange", () => { fx.nav(); route(); });
   route();
 })();
