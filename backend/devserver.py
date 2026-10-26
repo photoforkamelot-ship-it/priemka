@@ -13,11 +13,12 @@ from pathlib import Path
 
 from app.api import Api
 from app.storage import FileStore
+from app.disk import FakeDisk
 from app.telegram_auth import TgUser
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT.parent / "miniapp"
-api = Api(FileStore(ROOT / "dev-data.json"), bot_token="dev", dev_user=TgUser(id=1, first_name="Тест"))
+api = Api(FileStore(ROOT / "dev-data.json"), bot_token="dev", dev_user=TgUser(id=1, first_name="Тест"), disk=FakeDisk())
 
 
 class H(BaseHTTPRequestHandler):

@@ -44,6 +44,46 @@ class ContractSlot:
     summary: str = ""
 
 
+ZONES = ["Фасад", "Входная группа", "Тамбур", "Торговый зал", "Касса", "Стеллажка", "Пекарня", "Кофестанция",
+         "Санузел", "Кабинет", "Склад", "Разгрузка", "Агрегатная", "Конденсаторная опора"]
+SECTIONS = {"build": "СТРОИТЕЛЬНЫЕ НЕДОЧЁТЫ",
+            "equip": "НЕДОЧЁТЫ ОБОРУДОВАНИЯ И МЕЛКОГО ТОРГОВОГО ОБОРУДОВАНИЯ"}
+
+
+@dataclass
+class Comment:
+    author: str
+    text: str
+    date: str
+    color: str = ""          # закреплён за человеком; оранжевый — прогресс и сроки
+
+
+@dataclass
+class Remark:
+    id: str
+    section: str                    # build | equip
+    zone: str
+    text: str
+    phrase: str = ""                # фраза-ссылка на фото в письме
+    photos: list[dict] = field(default_factory=list)       # {path, url}
+    deadline: str = ""              # ISO-дата или "" — тогда deadline_ask
+    deadline_ask: str = ""          # «уточняется у …»
+    deadline_history: list[dict] = field(default_factory=list)   # {date, reason}
+    responsible: str = ""           # имя из справочника (для оборудования)
+    responsible_email: str = ""
+    status: str = "open"            # open | fixed | accepted | fixed_on_site
+    question: bool = False          # вопрос на согласование
+    comments: list[Comment] = field(default_factory=list)
+    author_tg: int = 0
+    author_name: str = ""
+    created: str = ""
+    stage: int = 1
+
+    @property
+    def needs_deadline(self) -> bool:
+        return not self.deadline and not self.question and self.status == "open"
+
+
 @dataclass
 class StoreObject:
     id: str
@@ -63,6 +103,9 @@ class StoreObject:
     contracts: dict[str, ContractSlot] = field(default_factory=lambda: {s: ContractSlot(s) for s in CONTRACT_SLOTS})
     first_day_done: dict[str, bool] = field(default_factory=dict)
     flags: dict[str, bool] = field(default_factory=dict)    # dvornik_hired, cash_access_ok, ...
+    remarks: list[Remark] = field(default_factory=list)
+    zones_checked: dict[str, list[str]] = field(default_factory=dict)   # этап → проверенные зоны
+    disk_folder: str = ""          # публичная папка на Яндекс Диске
 
     @property
     def full_address(self) -> str:
@@ -91,6 +134,8 @@ class StoreObject:
         d = dict(d)
         for k in ("director", "coordinator", "dev_manager", "mops_contractor"):
             d[k] = Person(**(d.get(k) or {}))
+        d["remarks"] = [Remark(**{**r, "comments": [Comment(**c) for c in r.get("comments", [])]})
+                        for r in d.get("remarks") or []]
         d["contracts"] = {s: ContractSlot(**v) for s, v in (d.get("contracts") or {}).items()} or \
             {s: ContractSlot(s) for s in CONTRACT_SLOTS}
         for k in ("accept_date", "open_date"):

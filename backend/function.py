@@ -36,7 +36,9 @@ def api_handler(event, context):
     store, sender = _ctx()
     body = event.get("body") or ""
     body = base64.b64decode(body) if event.get("isBase64Encoded") else body.encode()
-    api = Api(store, os.environ["BOT_TOKEN"], sender=sender)
+    from app.disk import Disk
+    disk = Disk(os.environ["DISK_TOKEN"]) if os.environ.get("DISK_TOKEN") else None
+    api = Api(store, os.environ["BOT_TOKEN"], sender=sender, disk=disk)
     status, headers, out = api.handle(event.get("httpMethod", "GET"), event.get("path", "/"), event.get("headers") or {}, body)
     binary = not headers.get("Content-Type", "").startswith(("application/json", "text/"))
     headers.update({"Access-Control-Allow-Origin": os.environ.get("APP_ORIGIN", "*")})

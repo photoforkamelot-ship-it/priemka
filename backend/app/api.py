@@ -11,7 +11,7 @@ import re
 from dataclasses import asdict
 from datetime import date
 
-from . import firstday
+from . import firstday, remarks as rm
 from .generators import contracts as gcontracts, pdfs, texts, vcf
 from .models import CONTRACT_SLOTS, Person, StoreObject
 from .storage import Store, new_id
@@ -33,8 +33,8 @@ def _pdf(data: bytes, name: str) -> Response:
 
 
 class Api:
-    def __init__(self, store: Store, bot_token: str, dev_user: TgUser | None = None, sender=None):
-        self.store, self.bot_token, self.dev_user = store, bot_token, dev_user
+    def __init__(self, store: Store, bot_token: str, dev_user: TgUser | None = None, sender=None, disk=None):
+        self.store, self.bot_token, self.dev_user, self.disk = store, bot_token, dev_user, disk
         self.sender = sender            # bot.sender.Sender — отправка файлов в чат «на печать»
 
     # ---------- авторизация ----------
@@ -57,12 +57,14 @@ class Api:
         except AuthError as e:
             return _err(f"нет доступа: {e}", 401)
         try:
-            data = json.loads(body or b"{}") if method in ("POST", "PUT") and body and not path.endswith("/upload") else {}
+            data = json.loads(body or b"{}") if method in ("POST", "PUT") and body else {}
             for pattern, m, fn in self.routes():
                 mm = re.fullmatch(pattern, path)
                 if mm and m == method:
                     return fn(u, data, body, *mm.groups())
             return _err("нет такого адреса", 404)
+        except PermissionError as e:
+            return _err(str(e), 403)
         except LookupError as e:
             return _err(str(e), 404)
         except (ValueError, KeyError) as e:
@@ -84,6 +86,15 @@ class Api:
             (o + r"/pdf/(konvert|dvornik)", "GET", self.get_pdf),
             (o + r"/print/(konvert|dvornik|vcf)", "POST", self.send_to_chat),
             (o + r"/vcf", "GET", self.get_vcf),
+            (o + r"/zones/(\d)", "GET", self.zones),
+            (o + r"/zones/(\d)", "POST", self.zone_check),
+            (o + r"/people", "GET", self.people),
+            (o + r"/remarks", "GET", self.list_remarks),
+            (o + r"/remarks", "POST", self.create_remark),
+            (o + r"/remarks/([0-9a-f]{12})", "PUT", self.update_remark),
+            (o + r"/remarks/([0-9a-f]{12})/photo", "POST", self.remark_photo),
+            (o + r"/remarks/([0-9a-f]{12})/status", "POST", self.remark_status),
+            (o + r"/remarks/([0-9a-f]{12})/comment", "POST", self.remark_comment),
         ]
 
     # ---------- объекты ----------
@@ -182,7 +193,7 @@ class Api:
 
     def contracts_upload(self, u, _d, body, oid):
         o = self._obj(oid, u)
-        payload = json.loads(body)
+        payload = _d
         pdf = base64.b64decode(payload["file_b64"])
         det = gcontracts.detect_pdf(pdf, o.address)
         slots = payload.get("slots") or det.slots          # ручной выбор места, если не распознано
@@ -224,3 +235,72 @@ class Api:
             cap = "На печать: книжная, 1 копия → «Поделиться» → Kyocera Mobile Print"
         self.sender.send_document(u.id, name, data, cap)
         return _json({"sent": True})
+
+    # ---------- обход и замечания ----------
+    def zones(self, u, _d, _b, oid, stage):
+        return _json(rm.zone_summary(self._obj(oid, u), int(stage)))
+
+    def zone_check(self, u, data, _b, oid, stage):
+        o = self._obj(oid, u)
+        lst = set(o.zones_checked.get(stage, []))
+        (lst.add if data.get("checked", True) else lst.discard)(data["zone"])
+        o.zones_checked[stage] = sorted(lst)
+        self.store.put(o)
+        return self.zones(u, None, None, oid, stage)
+
+    def people(self, u, _d, _b, oid):
+        return _json(rm.people_for(self._obj(oid, u)))
+
+    def _remark(self, o, rid):
+        r = next((r for r in o.remarks if r.id == rid), None)
+        if not r:
+            raise LookupError("замечание не найдено")
+        return r
+
+    def list_remarks(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        out = []
+        for sec, items in rm.numbered(o).items():
+            for n, r in items:
+                d = asdict(r); d["n"] = n; d["needs_deadline"] = r.needs_deadline
+                out.append(d)
+        return _json(out)
+
+    def create_remark(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        r = rm.create(o, data, u.id, u.display)
+        self.store.put(o)
+        return _json(asdict(r), 201)
+
+    def update_remark(self, u, data, _b, oid, rid):
+        o = self._obj(oid, u)
+        r = self._remark(o, rid)
+        rm.update(r, data)
+        self.store.put(o)
+        return _json(asdict(r))
+
+    def remark_photo(self, u, data, _b, oid, rid):
+        if not self.disk:
+            raise ValueError("Яндекс Диск не подключён")
+        o = self._obj(oid, u)
+        r = self._remark(o, rid)
+        img = base64.b64decode(data["image_b64"])
+        n = len(r.photos) + 1
+        path = self.disk.upload(img, o.code, r.zone, f"{r.id}_{n}.jpg")
+        r.photos.append({"path": path, "url": self.disk.public_url(path)})
+        self.store.put(o)
+        return _json(asdict(r))
+
+    def remark_status(self, u, data, _b, oid, rid):
+        o = self._obj(oid, u)
+        r = self._remark(o, rid)
+        rm.set_status(r, data["status"], is_owner=(u.id == o.owner_tg))
+        self.store.put(o)
+        return _json(asdict(r))
+
+    def remark_comment(self, u, data, _b, oid, rid):
+        o = self._obj(oid, u)
+        r = self._remark(o, rid)
+        rm.add_comment(r, data.get("author") or u.display, data.get("text", ""), data.get("color", ""))
+        self.store.put(o)
+        return _json(asdict(r))
