@@ -32,8 +32,8 @@ class Disk:
             if r.status_code not in (201, 409):
                 r.raise_for_status()
 
-    def upload(self, data: bytes, code: str, zone: str, filename: str) -> str:
-        folder = f"{self.root}/{safe(code)}/{safe(zone)}"
+    def upload(self, data: bytes, code: str, zone: str, filename: str, sub: str = "") -> str:
+        folder = f"{self.root}/{safe(code)}/{safe(zone)}" + (f"/{safe(sub)}" if sub else "")
         self._mkdirs(folder)
         path = f"{folder}/{safe(filename)}"
         r = self.s.get(f"{BASE}/resources/upload", params={"path": path, "overwrite": "true"}, timeout=15)
@@ -60,8 +60,8 @@ class FakeDisk:
     def __init__(self):
         self.files: dict[str, bytes] = {}
 
-    def upload(self, data, code, zone, filename):
-        path = f"Приёмка/{safe(code)}/{safe(zone)}/{safe(filename)}"
+    def upload(self, data, code, zone, filename, sub=""):
+        path = f"Приёмка/{safe(code)}/{safe(zone)}/" + (f"{safe(sub)}/" if sub else "") + safe(filename)
         self.files[path] = data
         return path
 

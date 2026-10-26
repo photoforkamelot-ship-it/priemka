@@ -12,6 +12,7 @@ from dataclasses import asdict
 from datetime import date
 
 from . import firstday, remarks as rm
+from . import norms as norms_mod
 from .generators import contracts as gcontracts, pdfs, texts, vcf
 from .models import CONTRACT_SLOTS, Person, StoreObject
 from .storage import Store, new_id
@@ -96,6 +97,15 @@ class Api:
             (o + r"/contracts/request", "POST", self.contracts_request),
             (o + r"/contracts/upload", "POST", self.contracts_upload),
             (o + r"/texts", "GET", self.get_texts),
+            (o + r"/survey", "PUT", self.put_survey),
+            (o + r"/checklists", "GET", self.get_checklists),
+            (o + r"/checks", "POST", self.put_check),
+            (o + r"/norms", "GET", self.get_norms),
+            (o + r"/delivery", "PUT", self.put_delivery),
+            (o + r"/statuses", "PUT", self.put_status),
+            (o + r"/extras", "PUT", self.put_extras),
+            (o + r"/album/(\w+)", "POST", self.album_photo),
+            (o + r"/letter/(first|update)", "GET", self.get_letter),
             (r"^/api/directory$", "GET", self.directory),
             (r"^/api/store/([^/]+)$", "GET", self.store_hint),
             (o + r"/pdf/(konvert|dvornik)", "GET", self.get_pdf),
@@ -240,6 +250,104 @@ class Api:
         return _json({"whatsapp_group": texts.whatsapp_group_name(o), "outlook_signature": texts.outlook_signature(o),
                       "mops": texts.mops_request(o) if o.okrug == "ЦФО" else None})
 
+    # ---------- опрос, этапы, недовозы, статусы, письмо ----------
+    def put_survey(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        allowed = {"coffee", "grids", "ends", "superstructures", "fresh", "ramp", "entrance_light", "fire_cabinet"}
+        for k, v in data.items():
+            if k in allowed:
+                o.survey[k] = v
+        self.store.put(o)
+        return self.get_norms(u, None, None, oid)
+
+    def get_checklists(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        from .letter import CHECK, status_lines
+        refs = {}
+        for r in o.remarks:
+            if r.item_ref:
+                refs.setdefault(r.item_ref, []).append({"id": r.id, "author": r.author_name, "status": r.status})
+        return _json({"stage1": CHECK["stage1"], "stage2": CHECK["stage2"], "statuses": CHECK["statuses"],
+                      "albums": CHECK["photo_albums"], "module2": CHECK["coffee2_module"],
+                      "checks": o.checks, "refs": refs, "state": o.statuses, "extras": o.extras, "survey": norms_mod.survey(o)})
+
+    def put_check(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        key = data["key"]
+        if data.get("state"):
+            o.checks[key] = {"state": data["state"], "by": u.display, "at": date.today().isoformat()}
+        else:
+            o.checks.pop(key, None)
+        self.store.put(o)
+        return _json({"key": key, "check": o.checks.get(key)})
+
+    def get_norms(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        return _json({"norms": norms_mod.norms(o), "delivery": o.delivery, "survey": norms_mod.survey(o),
+                      "survey_missing": norms_mod.survey_missing(o), "shortages": norms_mod.shortages(o)})
+
+    def put_delivery(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        lst = data["list"]
+        if lst not in norms_mod.LISTS:
+            raise ValueError("список: mto, hoz или coffee")
+        cur = o.delivery.setdefault(lst, {})
+        if "all" in data:                      # «всё пришло» / «сбросить» по списку
+            for it in norms_mod.norms(o)[lst]:
+                if it["norm"] is not None:
+                    cur[str(it["n"])] = it["norm"] if data["all"] else 0
+        else:
+            cur[str(data["n"])] = max(0, int(data.get("have") or 0))
+        self.store.put(o)
+        return self.get_norms(u, None, None, oid)
+
+    def put_status(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        st = o.statuses.setdefault(data["key"], {})
+        if data.get("state") in ("ok", "bad", "off"):
+            st["state"] = data["state"]
+        if "text" in data:
+            st["text"] = (data["text"] or "").strip()
+        self.store.put(o)
+        from .letter import status_lines
+        return _json({"statuses": o.statuses, "lines": status_lines(o)})
+
+    def put_extras(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        allowed = {"batteries", "pumps", "height_unloading", "height_ramp", "module2", "nochange", "show_received",
+                   "ahch_scan", "measures", "light", "cc_extra", "first_sent"}
+        for k, v in data.items():
+            if k in allowed:
+                o.extras[k] = v
+        self.store.put(o)
+        return _json(o.extras)
+
+    def album_photo(self, u, data, _b, oid, key):
+        if not self.disk:
+            raise ValueError("Яндекс Диск не подключён")
+        o = self._obj(oid, u)
+        from .letter import CHECK
+        titles = dict(CHECK["photo_albums"])
+        if key not in titles:
+            raise ValueError("неизвестный альбом")
+        img = base64.b64decode(data["image_b64"])
+        cnt = o.extras.setdefault("album_count", {})
+        cnt[key] = cnt.get(key, 0) + 1
+        path = self.disk.upload(img, o.code, "Фото для письма", f"{titles[key]}_{cnt[key]}.jpg", sub=titles[key])
+        folder = path.rsplit("/", 1)[0]
+        o.extras.setdefault("albums", {})[key] = self.disk.public_url(folder)
+        self.store.put(o)
+        return _json({"albums": o.extras["albums"], "count": cnt})
+
+    def get_letter(self, u, _d, _b, oid, mode):
+        o = self._obj(oid, u)
+        from . import letter
+        out = letter.build(o, mode)
+        out["mailto"] = texts.mailto(", ".join(e for _, e in out["to"]), out["subject"], "", ", ".join(e for _, e in out["cc"]))
+        out["deadline_hint"] = "Письмо — до 14:00 (ЦФО — до 14:00 МСК)" if mode == "first" else \
+            "Апдейт — до 10:00, только после того, как Жихарева приняла фото исправлений в МАХ"
+        return _json(out)
+
     # ---------- договоры ----------
     def contracts_request(self, u, data, _b, oid):
         o = self._obj(oid, u)
@@ -352,8 +460,12 @@ class Api:
         r = self._remark(o, rid)
         img = base64.b64decode(data["image_b64"])
         n = len(r.photos) + 1
-        path = self.disk.upload(img, o.code, r.zone, f"{r.id}_{n}.jpg")
+        num = next((i for i, x in enumerate(o.remarks, 1) if x.id == r.id), 0)
+        sub = f"{num:02d}_{r.phrase[:40]}"
+        path = self.disk.upload(img, o.code, r.zone, f"{num:02d}_{r.zone}_{r.phrase[:40]}_{n}.jpg", sub=sub)
         r.photos.append({"path": path, "url": self.disk.public_url(path)})
+        if len(r.photos) > 1:
+            r.folder_url = self.disk.public_url(path.rsplit("/", 1)[0])
         self.store.put(o)
         return _json(asdict(r))
 
@@ -367,6 +479,10 @@ class Api:
     def remark_comment(self, u, data, _b, oid, rid):
         o = self._obj(oid, u)
         r = self._remark(o, rid)
-        rm.add_comment(r, data.get("author") or u.display, data.get("text", ""), data.get("color", ""))
+        col = data.get("color", "")
+        if data.get("progress"):
+            from .letter import ORANGE
+            col = ORANGE
+        rm.add_comment(r, data.get("author") or u.display, data.get("text", ""), col)
         self.store.put(o)
         return _json(asdict(r))

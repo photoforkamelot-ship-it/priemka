@@ -78,6 +78,12 @@ class Remark:
     author_name: str = ""
     created: str = ""
     stage: int = 1
+    deadline_text: str = ""         # «по мере поступления» — вместо даты
+    accepted_date: str = ""         # когда руководитель поставил «принято»
+    fixed_date: str = ""
+    item_ref: str = ""
+    folder_url: str = ""            # публичная папка замечания на Диске (когда фото больше одного)              # пункт листа контроля, из которого создано замечание
+    log: list[dict] = field(default_factory=list)          # {who, when, what, before, after}
 
     @property
     def needs_deadline(self) -> bool:
@@ -106,6 +112,16 @@ class StoreObject:
     remarks: list[Remark] = field(default_factory=list)
     zones_checked: dict[str, list[str]] = field(default_factory=dict)   # этап → проверенные зоны
     disk_folder: str = ""          # публичная папка на Яндекс Диске
+    # Опрос перед приёмкой: от него считаются нормы недовоза и видимость пунктов письма
+    survey: dict = field(default_factory=dict)   # coffee 1|2, grids, ends, superstructures, fresh, ramp, entrance_light, fire_cabinet
+    # Этапы обхода: отметки пунктов чек-листов. ключ «s1:z3:2» → {"state": "ok"|"remark", "by": имя, "at": дата}
+    checks: dict = field(default_factory=dict)
+    # Этап 3: сколько привезли по позициям норм. {"mto": {"25": 20}, "hoz": {...}, "coffee": {...}}
+    delivery: dict = field(default_factory=dict)
+    # Блок статусов (●): ключ → {"state": "ok"|"bad"|"off", "text": "..."}
+    statuses: dict = field(default_factory=dict)
+    # Прочее для письма: батареи, насосы, высоты, альбомы фото, проходы, свет, лист АХЧ, режимы письма
+    extras: dict = field(default_factory=dict)
 
     @property
     def full_address(self) -> str:

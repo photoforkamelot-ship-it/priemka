@@ -27,7 +27,7 @@ def validate(r: Remark):
         raise ValueError("зона из списка")
     if not r.text.strip():
         raise ValueError("нужен текст замечания")
-    if not r.question and not r.deadline and not r.deadline_ask:
+    if not r.question and not r.deadline and not r.deadline_ask and not r.deadline_text:
         raise ValueError("замечание без срока сохранить нельзя: дата или «уточняется у …»")
     if r.deadline:
         date.fromisoformat(r.deadline)
@@ -38,7 +38,8 @@ def create(obj: StoreObject, data: dict, author_tg: int, author_name: str) -> Re
                deadline=data.get("deadline", "") or "", deadline_ask=data.get("deadline_ask", "") or "",
                responsible=data.get("responsible", ""), responsible_email=data.get("responsible_email", ""),
                question=bool(data.get("question")), author_tg=author_tg, author_name=author_name,
-               created=date.today().isoformat(), stage=int(data.get("stage", 1)))
+               created=date.today().isoformat(), stage=int(data.get("stage", 1)),
+               deadline_text=(data.get("deadline_text") or "").strip(), item_ref=data.get("item_ref", ""))
     r.phrase = (data.get("phrase") or "").strip() or default_phrase(r.text)
     if data.get("fixed_on_site"):
         r.status = "fixed_on_site"
@@ -48,7 +49,7 @@ def create(obj: StoreObject, data: dict, author_tg: int, author_name: str) -> Re
 
 
 def update(r: Remark, data: dict):
-    for k in ("section", "zone", "text", "phrase", "deadline_ask", "responsible", "responsible_email"):
+    for k in ("section", "zone", "text", "phrase", "deadline_ask", "deadline_text", "responsible", "responsible_email"):
         if k in data:
             setattr(r, k, (data[k] or "").strip())
     if "question" in data:
@@ -69,6 +70,13 @@ def set_status(r: Remark, status: str, is_owner: bool):
     if status == "accepted" and not is_owner:
         raise PermissionError("«Принято» ставит только руководитель команды")
     r.status = status
+    today = date.today().isoformat()
+    if status == "accepted":
+        r.accepted_date = today
+    elif status == "fixed":
+        r.fixed_date = today
+    elif status == "open":
+        r.accepted_date = r.fixed_date = ""
 
 
 def add_comment(r: Remark, author: str, text: str, color: str = ""):
