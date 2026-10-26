@@ -1,5 +1,7 @@
 # Приёмка магазина — Telegram Mini App + бот
 
+Бот: @priemka_yarche_bot.
+
 Приложение для руководителей команды открытия «Ярче!»: данные объекта, «Первый день»,
 договоры, заявка АХЧ, дворник, напоминания бота. ТЗ: https://claude.ai/artifact/XXwqmcL5jBzszWcXuSfqHS ·
 макеты: https://claude.ai/artifact/M18VYyd7nceQcNpfeYnPLC
