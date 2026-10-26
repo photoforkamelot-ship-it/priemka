@@ -72,6 +72,17 @@
     }
     if (inTg) tg.openLink(absUrl(u)); else window.open(absUrl(u), "_blank");
   }
+  // шапка уезжает вверх при прокрутке вниз и возвращается при прокрутке вверх
+  let lastY = 0, ticking = false;
+  window.addEventListener("scroll", () => {
+    if (ticking) return; ticking = true;
+    requestAnimationFrame(() => {
+      const y = window.scrollY, h = $top.offsetHeight;
+      const hide = y > lastY && y > h;
+      if (Math.abs(y - lastY) > 6) { $top.classList.toggle("hid", hide); document.documentElement.style.setProperty("--topH", (hide ? 0 : h) + "px"); lastY = y; }
+      ticking = false;
+    });
+  }, { passive: true });
   document.addEventListener("focusin", (e) => {
     if (!e.target.matches("input:not([type=checkbox]):not([type=file]), textarea, select")) return;
     document.body.classList.add("kb");
@@ -86,8 +97,13 @@
     e.preventDefault(); go(h);
   });
 
+  function shareUrl(url, title) {
+    if (inTg) return tg.openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(url) + "&text=" + encodeURIComponent(title));
+    if (navigator.share) return navigator.share({ title, url }).catch(() => {});
+    copy(url);
+  }
   function top(o) {
-    $top.hidden = false;
+    $top.hidden = false; $top.classList.remove("hid");
     // o: {back:[href,text], cap, title, right, tabs:[id,active], extra}
     $top.innerHTML = `<div class="in ${o.tabs ? "" : "pad"}">
       ${o.back ? `<a class="back" href="${o.back[0]}">← ${esc(o.back[1])}</a>` : ""}
@@ -331,7 +347,8 @@
     top({ back: ["#objects", "Объекты"], cap: objLine(o), title: "Подготовка", tabs: [id, "prep"],
       right: `<span class="sub" style="font-weight:700" id="prog">${prog()} из ${items.length}</span>`,
       extra: `<div class="bar"><i id="barI" style="width:${(prog() / items.length) * 100}%"></i></div>` });
-    render(wrap.innerHTML);
+    render(`<div class="row"><span class="sub">Памятка «Не забывай» с данными объекта</span><button class="small" id="shareMemo">Поделиться памяткой</button></div>` + wrap.innerHTML);
+    document.getElementById("shareMemo").onclick = () => shareUrl(absUrl(MEMO + "index.html"), "Не забывай — памятка открытия");
     const live = [...$app.querySelectorAll("details.item")];
     const upd = () => { const n = live.filter((d) => d.dataset.done === "1").length; document.getElementById("prog").textContent = `${n} из ${live.length}`; document.getElementById("barI").style.width = (n / live.length) * 100 + "%"; };
     $app.querySelectorAll("input[data-k]").forEach((cb) => (cb.onchange = async () => {

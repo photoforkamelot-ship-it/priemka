@@ -185,3 +185,21 @@ button.confirm{background:#15803d;border-color:#15803d}
 #doc{height:100vh;height:100dvh}
 .docback{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom));background:var(--fg);color:var(--card);padding:10px 16px;border-radius:999px;font-weight:600;text-decoration:none;z-index:9}
 .p .btn.small{min-height:34px;padding:0 10px;font-size:13px}
+
+/* компактная шапка, уезжает при прокрутке вниз */
+#top{transition:transform .22s ease}
+#top.hid{transform:translateY(-100%)}
+#top .in{padding:8px 16px 0;gap:3px}
+#top .in.pad{padding-bottom:10px}
+h1{font-size:19px}
+.back{font-size:13px}
+.cap{font-size:11.5px}
+.tabs a{padding:8px 4px;font-size:13.5px}
+.stages a{padding:6px 8px}
+#top .seg button{min-height:34px}
+/* кнопки действий — заливкой, с откликом на нажатие */
+.item .btn,.p .btn.small{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.item .btn.pdf{background:var(--card);color:var(--accent)}
+button,.btn,.list > a,a.card,summary{transition:transform .08s ease,box-shadow .15s ease,filter .15s ease}
+button:active,.btn:active,.list > a:active,a.card:active{transform:scale(.97);filter:brightness(1.1);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 35%,transparent)}
+summary:active{filter:brightness(.97)}

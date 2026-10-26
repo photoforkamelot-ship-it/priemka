@@ -41,7 +41,10 @@ details[data-done="1"] .num{background:var(--ok);color:#fff}
 .body ol,.body ul{margin:0;padding-left:20px}.body li{margin:4px 0}
 .btns{display:flex;flex-wrap:wrap;gap:8px}
 .btn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 14px;border-radius:11px;font-weight:600;font-size:14px;text-decoration:none;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;font-family:var(--font)}
+.btn{background:var(--accent);color:#fff;transition:transform .08s,box-shadow .15s,filter .15s}
 .btn.main{background:var(--accent);color:#fff}
+.btn.pdf{background:var(--card);color:var(--accent)}
+.btn:active{transform:scale(.96);filter:brightness(1.12);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 35%,transparent)}
 .btn.ext::after{content:"↗";font-size:12px;opacity:.7}
 .btn.pdf::before{content:"PDF";font-size:10.5px;font-weight:800;background:var(--bad-soft);color:var(--bad);border-radius:5px;padding:1px 5px}
 .note{border-radius:12px;padding:10px 12px;font-size:14px;background:var(--accent-soft)}
@@ -67,7 +70,7 @@ a{color:var(--accent)}
 <body data-region="sfo">
 <header class="top"><div class="in">
   <div class="row"><h1>Не забывай</h1><span class="prog" id="prog">0 из 19</span></div>
-  <div class="obj">Пример объекта: ПР22 · г. Пермь, Комсомольский пр-т, 36 — в приложении подставится ваш</div>
+  <div class="obj">Общая памятка для команды открытия. В приложении @priemka_yarche_bot пункты заполняются данными вашего объекта</div>
   <div class="bar"><i id="barI"></i></div>
   <div class="row">
     <div class="seg" role="group" aria-label="Округ">
@@ -75,7 +78,7 @@ a{color:var(--accent)}
       <button type="button" data-r="ufo" aria-pressed="false">УФО</button>
       <button type="button" data-r="cfo" aria-pressed="false">ЦФО</button>
     </div>
-    <a class="btn" href="files/kontakty-otkrytie.vcf" download>Контакты .vcf</a>
+    <span class="btns"><a class="btn" href="files/kontakty-otkrytie.vcf" download>Контакты .vcf</a><button class="btn" type="button" id="shareMemo">Поделиться</button></span>
   </div>
 </div></header>
 
@@ -168,9 +171,7 @@ E-MAIL: [почта магазина]</pre>
 </div></details>
 
 <details class="item" data-id="7"><summary><span class="num">7</span><span class="st"><b>Kyocera Mobile Print</b><span>печать с телефона</span></span><span class="chev">▾</span></summary><div class="body">
-  <div class="btns"><a class="btn ext" target="_blank" href="https://play.google.com/store/apps/details?id=com.kyocera.kyoprint">Android — Google Play</a><a class="btn ext" target="_blank" href="https://disk.yandex.ru/d/NbRBbQOiperOfw">Android — файл установки</a></div>
-  <div class="note warn"><b>iPhone:</b> перед установкой позвоните — подскажу, как поставить.</div>
-  <div class="btns"><a class="btn main" href="tel:89234112728">Позвонить 8-923-411-27-28</a></div>
+  <div class="btns"><a class="btn main ext" target="_blank" href="https://apps.apple.com/ru/app/kyocera-mobile-print/id510179385">iPhone — App Store</a><a class="btn main ext" target="_blank" href="https://play.google.com/store/apps/details?id=com.kyocera.kyoprint">Android — Google Play</a><a class="btn ext" target="_blank" href="https://disk.yandex.ru/d/NbRBbQOiperOfw">Android — файл установки</a></div>
   <label class="done"><input type="checkbox"> Сделано</label>
 </div></details>
 
@@ -289,6 +290,11 @@ E-MAIL: [почта магазина]</pre>
   document.querySelectorAll('[data-copy]').forEach(function(b){b.onclick=function(){var t=document.getElementById(b.dataset.copy).textContent,o=b.textContent;function ok(){b.textContent='Скопировано';setTimeout(function(){b.textContent=o},1500)}if(navigator.clipboard){navigator.clipboard.writeText(t).then(ok,function(){})}}});
   var ip=document.getElementById('ipIn'),out=document.getElementById('ipOut');ip.oninput=function(){var p=ip.value.trim().split('.');out.textContent=p.length===4?p.slice(0,3).join('.')+'.20':'—'};
   region(st.reg||'sfo');
+  var sh=document.getElementById('shareMemo');
+  if(sh) sh.onclick=async function(){var url=location.href.split('#')[0],title='Не забывай — памятка открытия';var tg=null;try{tg=(window.parent&&window.parent.Telegram&&window.parent.Telegram.WebApp)||(window.Telegram&&window.Telegram.WebApp)}catch(e){}
+    if(tg&&tg.initData){tg.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(title));return}
+    if(navigator.share){try{await navigator.share({title:title,url:url});return}catch(e){if(e&&e.name==='AbortError')return}}
+    try{await navigator.clipboard.writeText(url);sh.textContent='Ссылка скопирована';setTimeout(function(){sh.textContent='Поделиться'},1500)}catch(e){prompt('Ссылка на памятку',url)}};
 })();
 </script>
 </body>
