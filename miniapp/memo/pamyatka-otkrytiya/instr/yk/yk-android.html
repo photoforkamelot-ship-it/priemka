@@ -509,7 +509,7 @@
           </svg>
         </button>
         <a class="iconbtn" href="yk-ustanovka-android.pdf" target="_blank" aria-label="Скачать PDF" title="Скачать PDF" style="color:inherit;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></a>
-        <button class="iconbtn" type="button" id="copyLink" aria-label="Скопировать ссылку на страницу">
+        <button class="iconbtn" type="button" id="copyLink" aria-label="Поделиться страницей">
           <!-- link -->
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
@@ -823,10 +823,15 @@
       });
 
       btnCopy.addEventListener("click", async () => {
-        try{
-          await navigator.clipboard.writeText(location.href);
-          btnCopy.animate([{transform:"translateY(-1px)"},{transform:"translateY(0px)"}],{duration:180});
-        }catch(e){}
+        // «Поделиться»: в приложении Telegram — окно «Переслать» Telegram; в браузере — системное меню; иначе — копия ссылки
+        const url = location.href.split("#")[0], title = document.title;
+        const flash = (t) => { let el = document.getElementById("shareToast"); if (!el) { el = document.createElement("div"); el.id = "shareToast";
+          el.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#16181d;color:#fff;padding:10px 16px;border-radius:12px;font:600 14px system-ui;z-index:99"; document.body.appendChild(el); }
+          el.textContent = t; el.hidden = false; clearTimeout(el.t); el.t = setTimeout(() => (el.hidden = true), 2200); };
+        let tg = null; try { tg = (window.parent && window.parent.Telegram && window.parent.Telegram.WebApp) || (window.Telegram && window.Telegram.WebApp); } catch (e) {}
+        if (tg && tg.initData) { tg.openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(url) + "&text=" + encodeURIComponent(title)); return; }
+        if (navigator.share) { try { await navigator.share({ title, url }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+        try { await navigator.clipboard.writeText(url); flash("Ссылка скопирована"); } catch (e) { flash(url); }
       });
 
       // Build TOC from headings (h3/h4) – no new visible text beyond "Оглавление"

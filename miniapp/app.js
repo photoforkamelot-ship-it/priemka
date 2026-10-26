@@ -35,6 +35,11 @@
   const absUrl = (u) => new URL(u, location.href).href;
   /** Внешние ссылки, файлы, почта и звонки. В Telegram mailto:/tel: идут через go.html (в браузере телефона они открывают почту/звонилку). */
   function go(u) {
+    // свои страницы-инструкции открываются внутри приложения (экран с кнопкой «Назад»), PDF и чужие сайты — в браузере Telegram
+    const abs = /^(mailto|tel):/i.test(u) ? "" : absUrl(u);
+    if (abs && abs.startsWith(location.origin + "/") && /\.html?(#.*)?$/i.test(abs.split("?")[0])) {
+      location.hash = "#doc/" + encodeURIComponent(abs.slice(location.origin.length + 1)); return;
+    }
     if (/^(mailto|tel):/i.test(u)) {
       if (inTg) tg.openLink(absUrl("go.html") + "#" + encodeURIComponent(u)); else location.href = u;
       return;
@@ -826,11 +831,36 @@
     });
   }
 
+  // ---------- инструкция внутри приложения ----------
+  function docScreen(path) {
+    top({ back: ["javascript:history.back()", "Назад"], title: "Инструкция" });
+    $app.innerHTML = `<iframe id="doc" src="${esc(path)}" title="Инструкция" allow="clipboard-write; web-share"></iframe>`;
+    const fr = document.getElementById("doc");
+    fr.onload = () => {
+      try {
+        const d = fr.contentDocument;
+        const h1 = d.title || ""; if (h1) $top.querySelector("h1").textContent = h1.replace(/\s+[—-]\s+.*$/, "");
+        d.addEventListener("click", (e) => {
+          const a = e.target.closest("a[href]"); if (!a) return;
+          const href = a.getAttribute("href");
+          if (href.startsWith("#")) return;                    // оглавление внутри страницы
+          const abs = new URL(href, fr.contentWindow.location.href).href;
+          if (abs.startsWith(location.origin + "/") && /\.html?$/i.test(abs.split(/[?#]/)[0])) return;   // другая инструкция — в этом же окне
+          e.preventDefault(); go(abs);                         // PDF, сайты, почта — наружу
+        });
+      } catch (e) {}
+    };
+    if (tg && tg.BackButton) { tg.BackButton.show(); tg.BackButton.onClick(back); }
+    function back() { if (tg && tg.BackButton) { tg.BackButton.hide(); tg.BackButton.offClick(back); } history.back(); }
+    window.addEventListener("hashchange", function off() { if (tg && tg.BackButton) { tg.BackButton.hide(); tg.BackButton.offClick(back); } window.removeEventListener("hashchange", off); });
+  }
+
   // ---------- маршруты ----------
   async function route() {
     const h = location.hash.replace(/^#/, "") || "objects";
     const m = h.match(/^o\/([0-9a-f]{12})(?:\/(\w+))?(?:\/(\w+))?(?:\/(\d+))?/);
     try {
+      if (h.startsWith("doc/")) return docScreen(decodeURIComponent(h.slice(4)));
       if (h === "objects") return await objects();
       if (h === "new") return await newObject();
       if (h === "instr" || h === "memo") return await instrScreen(null);
