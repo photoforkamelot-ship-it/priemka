@@ -30,7 +30,7 @@ class H(BaseHTTPRequestHandler):
             p = STATIC / (self.path.split("?")[0].lstrip("/") or "index.html")
             if not p.is_file():
                 p = STATIC / "index.html"
-            st, hd, body = 200, {"Content-Type": mimetypes.guess_type(p.name)[0] or "text/plain"}, p.read_bytes()
+            st, hd, body = 200, {"Content-Type": (mimetypes.guess_type(p.name)[0] or "text/plain") + ("; charset=utf-8" if p.suffix in (".html", ".css", ".js", ".json", ".vcf", ".txt") else "")}, p.read_bytes()
         self.send_response(st)
         for k, v in hd.items():
             self.send_header(k, v)

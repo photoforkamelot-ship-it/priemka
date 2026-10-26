@@ -101,4 +101,6 @@ class App:
         if not str(p).startswith(str(STATIC.resolve())) or not p.is_file():
             p = STATIC / "index.html"
         ctype = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+        if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
+            ctype += "; charset=utf-8"   # иначе браузер телефона показывает русский текст «кракозябрами»
         return 200, {"Content-Type": ctype, "Cache-Control": "no-cache"}, p.read_bytes()
