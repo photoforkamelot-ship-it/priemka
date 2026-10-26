@@ -75,6 +75,7 @@
   // шапка уезжает вверх при прокрутке вниз и возвращается при прокрутке вверх
   let lastY = 0, ticking = false;
   window.addEventListener("scroll", () => {
+    if (lastRoute === location.hash && !location.hash.startsWith("#doc/")) SCROLL[location.hash] = window.scrollY;
     if (ticking) return; ticking = true;
     requestAnimationFrame(() => {
       const y = window.scrollY, h = $top.offsetHeight;
@@ -119,10 +120,14 @@
   }
   const objLine = (o) => `${o.code}${o.city ? " · " + o.city : ""}${o.address ? ", " + o.address : ""}`;
   let lastRoute = "";
+  // место на странице запоминается для каждого экрана: вернулись из инструкции — там же, где были
+  const SCROLL = {};
   function render(html) {
     const same = lastRoute === location.hash, y = window.scrollY;
     $app.innerHTML = html; lastRoute = location.hash;
-    window.scrollTo(0, same ? y : 0);          // перерисовка того же экрана не прыгает наверх
+    const back = SCROLL[location.hash] || 0;
+    window.scrollTo(0, same ? y : back);       // перерисовка того же экрана не прыгает наверх
+    if (!same && back) setTimeout(() => window.scrollTo(0, back), 60);
   }
   function fail(e) {
     top({ title: "Не получилось" });
