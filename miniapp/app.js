@@ -59,7 +59,7 @@
       ${o.tabs ? tabs(o.tabs[0], o.tabs[1]) : ""}</div>`;
   }
   function tabs(id, on) {
-    const t = [["prep", "Подготовка", `#o/${id}`], ["walk", "Обход", `#o/${id}/walk/1`], ["data", "Данные", `#o/${id}/data`], ["instr", "Инструкции", `#o/${id}/instr`]];
+    const t = [["prep", "Подготовка", `#o/${id}`], ["walk", "Обход", `#o/${id}/walk/1`], ["letter", "Письмо", `#o/${id}/letter/first`], ["data", "Данные", `#o/${id}/data`], ["instr", "Инструкции", `#o/${id}/instr`]];
     return `<nav class="tabs">${t.map(([k, n, h]) => `<a href="${h}" class="${k === on ? "on" : ""}">${n}</a>`).join("")}</nav>`;
   }
   const objLine = (o) => `${o.code}${o.city ? " · " + o.city : ""}${o.address ? ", " + o.address : ""}`;
@@ -416,80 +416,390 @@
     catch (e) { toast(e.message); }
   }
 
-  // ---------- обход ----------
+  // ---------- обход: общие куски ----------
   const ZONES = ["Фасад", "Входная группа", "Тамбур", "Торговый зал", "Касса", "Стеллажка", "Пекарня", "Кофестанция",
     "Санузел", "Кабинет", "Склад", "Разгрузка", "Агрегатная", "Конденсаторная опора"];
   const STAGES = { 1: ["Этап 1", "Ремонт"], 2: ["Этап 2", "Оборудование"], 3: ["Этап 3", "Наличие"] };
-  async function walkScreen(id, stage) {
-    const [o, zones] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/zones/${stage}`)]);
-    const done = zones.filter((z) => z.checked).length;
+  const initials = (n) => (n || "").split(" ").slice(0, 2).map((x) => x[0] || "").join("").toUpperCase();
+  const fab = (href) => `<a class="fab" href="${href}">+ Замечание</a>`;
+  function stepper(val, attrs) {
+    return `<span class="stepper" ${attrs}><button type="button" data-d="-1" aria-label="Меньше">−</button><b>${val}</b><button type="button" data-d="1" aria-label="Больше">+</button></span>`;
+  }
+  function walkTop(o, id, stage, st) {
     top({ back: ["#objects", "Объекты"], cap: objLine(o), title: "Обход", tabs: [id, "walk"],
-      extra: `<div class="stages">${[1, 2, 3].map((s) => `<a href="#o/${id}/walk/${s}" class="${s == stage ? "on" : ""}"><b>${STAGES[s][0].toUpperCase()}</b><span>${STAGES[s][1]}</span></a>`).join("")}</div>
-        <div class="row sub"><b style="color:var(--fg)">Проверено ${done} из ${zones.length} зон</b>${zones.length - done ? `<span style="color:var(--warn);font-weight:600">${zones.length - done} не проверено</span>` : ""}</div>
-        <div class="bar"><i style="width:${(done / zones.length) * 100}%"></i></div>` });
-    render(zones.map((z, i) => `<a class="card ${z.checked ? "" : "warnc"}" href="#o/${id}/zone/${stage}/${i}" style="flex-direction:row;align-items:center;justify-content:space-between">
-        <span style="display:flex;flex-direction:column;gap:2px"><span class="title">${esc(z.zone)}</span>
-        <span class="sub" style="${z.checked ? "" : "color:var(--warn)"}">${z.remarks ? `${z.remarks} замеч.` : "без замечаний"}${z.no_deadline ? ` · без срока: ${z.no_deadline}` : ""}${z.authors.length ? " · " + esc(z.authors.join(", ")) : ""}${z.checked ? "" : " · не проверено"}</span></span>
-        ${z.checked ? `<span class="chip ok">✓</span>` : `<span class="chip warn">›</span>`}</a>`).join(""));
+      extra: `<div class="stages">${[1, 2, 3].map((s) => `<a href="#o/${id}/walk/${s}" class="${s == stage ? "on" : ""}"><b>${STAGES[s][0].toUpperCase()}${st && st[s] ? " ✓" : ""}</b><span>${STAGES[s][1]}</span></a>`).join("")}</div>` });
   }
-  async function zoneScreen(id, stage, zi) {
-    const zone = ZONES[zi];
-    const [o, zs, all] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/zones/${stage}`), api("GET", `/api/objects/${id}/remarks`)]);
-    const z = zs[zi];
-    const rs = all.filter((r) => r.zone === zone && String(r.stage) === String(stage));
-    top({ back: [`#o/${id}/walk/${stage}`, "Обход · " + STAGES[stage][1]], cap: objLine(o), title: zone });
-    render(`${rs.length ? "" : `<div class="empty">Замечаний нет</div>`}
-      ${rs.map((r) => `<a class="card ${r.needs_deadline ? "warnc" : ""}" href="#o/${id}/r/${r.id}">
-        <span class="title">${r.n}. ${esc(r.text)}</span>
-        <span class="sub">${r.section === "equip" ? "оборудование" : "стройка"} · ${r.deadline ? "срок " + fmt(r.deadline) : r.question ? "вопрос" : "срок уточняется у " + esc(r.deadline_ask)} · фото: ${r.photos.length} · ${esc(r.author_name)}</span>
-        ${statusChip(r.status)}</a>`).join("")}
-      <button id="chk">${z.checked ? "Снять отметку «проверено»" : "Зона проверена ✓"}</button>
-      <div class="bottom"><a class="btn main" href="#o/${id}/rnew/${stage}/${zi}">+ Замечание</a></div>`);
-    document.getElementById("chk").onclick = async () => { await api("POST", `/api/objects/${id}/zones/${stage}`, { zone, checked: !z.checked }); location.hash = `#o/${id}/walk/${stage}`; };
+  async function loadWalk(id) {
+    const [o, C, rs] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/checklists`), api("GET", `/api/objects/${id}/remarks`)]);
+    return { o, C, rs };
   }
+  function checkStats(C, prefix, zones) {
+    let total = 0, done = 0;
+    zones.forEach((z) => z.items.forEach((_, i) => { total++; const k = `${prefix}:${z.key}:${i}`; if (C.checks[k] || C.refs[k]) done++; }));
+    return { total, done };
+  }
+  /** Зоны с пунктами чек-листа: ✓ — в порядке, ! — есть замечание, пунктир — не проверено. */
+  function zonesHtml(id, stage, prefix, zones, C, rs) {
+    return zones.map((z) => {
+      const keys = z.items.map((_, i) => `${prefix}:${z.key}:${i}`);
+      const zrs = rs.filter((r) => r.zone === z.zone && String(r.stage) === String(stage) && !(r.item_ref && keys.includes(r.item_ref)) && (!z.first || true));
+      const done = keys.filter((k) => C.checks[k] || C.refs[k]).length;
+      const nrem = keys.reduce((a, k) => a + (C.refs[k] || []).length, 0) + zrs.length;
+      const complete = done === keys.length;
+      return `<details class="zone ${complete ? "" : "todo"}" ${complete && !nrem ? "" : "open"} data-zone="${esc(z.zone)}">
+        <summary><span class="st"><b>${esc(z.title)}</b><span>${done} из ${keys.length} пунктов${nrem ? ` · ${nrem} замеч.` : complete ? " · без замечаний" : ""}${complete ? "" : " · не проверено: " + (keys.length - done)}</span></span>
+          ${complete ? `<span class="okdot">✓</span>` : `<span class="chev">▾</span>`}</summary>
+        <div class="items">${z.items.map((t, i) => {
+          const k = keys[i], ref = C.refs[k] || [], ch = C.checks[k];
+          const state = ref.length ? "bad" : ch ? "ok" : "";
+          return `<div class="it ${state || "un"}" data-k="${k}">
+            <button class="mark" data-toggle="${k}" aria-label="Отметить">${state === "ok" ? "✓" : state === "bad" ? "!" : ""}</button>
+            <span class="txt" data-toggle="${k}">${esc(t)}</span>
+            ${ref.length ? ref.map((r) => `<a class="who" href="#o/${id}/r/${r.id}" title="${esc(r.author)}">${esc(initials(r.author))}</a>`).join("") : ch ? `<span class="who ok" title="${esc(ch.by)}">${esc(initials(ch.by))}</span>` : ""}
+            <button class="addr" data-add="${k}" data-zone="${esc(z.zone)}" data-text="${esc(t)}" aria-label="Замечание по пункту">+!</button></div>`;
+        }).join("")}
+        ${zrs.map((r) => `<a class="it rem" href="#o/${id}/r/${r.id}"><span class="mark bad">!</span><span class="txt">${esc(r.text)}</span><span class="who">${esc(initials(r.author_name))}</span></a>`).join("")}
+        ${complete ? "" : `<button class="small ghost allok" data-allok="${keys.join(",")}">Остальное в порядке</button>`}</div></details>`;
+    }).join("");
+  }
+  function bindZones(id, stage, C, rerender) {
+    $app.querySelectorAll("[data-toggle]").forEach((el) => (el.onclick = async () => {
+      const k = el.dataset.toggle;
+      if (C.refs[k]) { location.hash = `#o/${id}/r/${C.refs[k][0].id}`; return; }
+      const on = !C.checks[k];
+      const row = el.closest(".it"); row.classList.toggle("ok", on); row.classList.toggle("un", !on); row.querySelector(".mark").textContent = on ? "✓" : "";
+      try { const r = await api("POST", `/api/objects/${id}/checks`, { key: k, state: on ? "ok" : null }); if (r.check) C.checks[k] = r.check; else delete C.checks[k]; } catch (e) { toast(e.message); }
+    }));
+    $app.querySelectorAll("[data-allok]").forEach((b) => (b.onclick = async () => {
+      for (const k of b.dataset.allok.split(",")) if (!C.checks[k] && !C.refs[k]) { await api("POST", `/api/objects/${id}/checks`, { key: k, state: "ok" }); }
+      rerender();
+    }));
+    $app.querySelectorAll("[data-add]").forEach((b) => (b.onclick = () => {
+      try { sessionStorage.setItem("newRemark", JSON.stringify({ item_ref: b.dataset.add, zone: b.dataset.zone, hint: b.dataset.text })); } catch (e) {}
+      location.hash = `#o/${id}/rnew/${stage}/${Math.max(0, ZONES.indexOf(b.dataset.zone))}`;
+    }));
+  }
+
+  // ---------- этап 1: ремонт по зонам листа контроля ----------
+  async function stage1(id) {
+    const { o, C, rs } = await loadWalk(id);
+    const s = checkStats(C, "s1", C.stage1);
+    walkTop(o, id, 1);
+    render(`${surveyBanner(o, C, id)}
+      <div class="row sub"><b style="color:var(--fg)">Проверено ${s.done} из ${s.total} пунктов</b>${s.total - s.done ? `<span style="color:var(--warn);font-weight:600">${s.total - s.done} не проверено</span>` : `<span style="color:var(--ok);font-weight:600">всё проверено</span>`}</div>
+      <div class="bar"><i style="width:${(s.done / s.total) * 100}%"></i></div>
+      <span class="sub">Касание пункта — «в порядке» ✓. «+!» — замечание по пункту. Непроверенные подсвечены.</span>
+      ${zonesHtml(id, 1, "s1", C.stage1, C, rs)}
+      ${s.total - s.done ? "" : `<a class="btn main" href="#o/${id}/walk/2">Дальше: этап 2 — оборудование</a>`}
+      ${fab(`#o/${id}/rnew/1/0`)}`);
+    bindZones(id, 1, C, () => stage1(id));
+  }
+  function surveyBanner(o, C, id) {
+    const sv = C.survey || {};
+    const miss = ["grids", "ends", "superstructures"].filter((k) => sv[k] === null || sv[k] === undefined);
+    return miss.length ? `<a class="card warnc" href="#o/${id}/survey" style="flex-direction:row;align-items:center;justify-content:space-between"><span><b>Опрос перед приёмкой</b><br><span class="sub">Кофемашины, сетки, торцы, суперструктуры — от них считаются нормы недовоза</span></span><span class="chip warn">заполнить</span></a>` : "";
+  }
+
+  // ---------- этап 2: оборудование, проходы, свет ----------
+  async function stage2(id) {
+    const { o, C, rs } = await loadWalk(id);
+    const ex = C.extras || {};
+    const ms = ex.measures || [];
+    const light = ex.light || {};
+    const s = checkStats(C, "s2", C.stage2);
+    walkTop(o, id, 2);
+    render(`<div class="note"><b>Замерьте проходы рулеткой</b> по зелёным цифрам на плане. Допуск ±15 см.</div>
+      <div class="card" style="gap:0"><div class="mrow head"><span>ТОЧКА</span><span></span><span>ПЛАН, см</span><span>ФАКТ, см</span></div>
+        ${ms.map((m, i) => { const d = m.fact !== "" && m.fact != null && m.plan ? +m.fact - +m.plan : null; const bad = d !== null && Math.abs(d) > 15;
+          return `<div class="mrow"><span class="pt ${d === null ? "" : bad ? "bad" : "ok"}">${i + 1}</span>
+            <span class="${bad ? "badt" : d === null ? "sub" : "okt"}">${d === null ? "не замерено" : bad ? `${d > 0 ? "+" : ""}${d} · <a href="#" data-mrem="${i}">в замечание →</a>` : "✓ в допуске"}</span>
+            <input inputmode="numeric" data-m="${i}" data-f="plan" value="${m.plan ?? ""}" placeholder="—"><input inputmode="numeric" data-m="${i}" data-f="fact" value="${m.fact ?? ""}" placeholder="—"></div>`; }).join("")}
+        <button class="small ghost" id="addm" style="margin-top:8px">+ точка</button></div>
+      <div class="card" style="flex-direction:row;align-items:center;justify-content:space-between"><span><b>Световой план · зал</b><br><span class="sub">светильников по плану / по факту</span></span>
+        <span class="row" style="gap:6px"><input class="num" inputmode="numeric" id="lp" value="${light.plan ?? ""}" placeholder="план"><input class="num" inputmode="numeric" id="lf" value="${light.fact ?? ""}" placeholder="факт"></span></div>
+      <div class="row sub"><b style="color:var(--fg)">Оборудование: ${s.done} из ${s.total}</b></div>
+      ${zonesHtml(id, 2, "s2", C.stage2.map((z) => z.key === "e3" && +(C.survey.coffee || 1) === 2 ? { ...z, title: "Кофестанция · 2 модуля" } : z), C, rs)}
+      <a class="btn main" href="#o/${id}/walk/3">Дальше: этап 3 — наличие</a>
+      ${fab(`#o/${id}/rnew/2/7`)}`);
+    bindZones(id, 2, C, () => stage2(id));
+    const saveM = async () => { await api("PUT", `/api/objects/${id}/extras`, { measures: ms }); };
+    $app.querySelectorAll("[data-m]").forEach((inp) => (inp.onchange = async () => { ms[inp.dataset.m][inp.dataset.f] = inp.value.trim(); await saveM(); stage2(id); }));
+    document.getElementById("addm").onclick = async () => { ms.push({ plan: "", fact: "" }); await saveM(); stage2(id); };
+    $app.querySelectorAll("[data-mrem]").forEach((a) => (a.onclick = (e) => {
+      e.preventDefault(); const m = ms[a.dataset.mrem];
+      try { sessionStorage.setItem("newRemark", JSON.stringify({ zone: "Стеллажка", section: "equip", text: `Проход у точки ${+a.dataset.mrem + 1}: по плану ${m.plan} см, по факту ${m.fact} см — привести в соответствие с планировкой` })); } catch (_) {}
+      location.hash = `#o/${id}/rnew/2/5`;
+    }));
+    const saveL = async () => api("PUT", `/api/objects/${id}/extras`, { light: { plan: document.getElementById("lp").value, fact: document.getElementById("lf").value } });
+    document.getElementById("lp").onchange = saveL; document.getElementById("lf").onchange = saveL;
+  }
+
+  // ---------- этап 3: недовозы, статусы, батареи, фото ----------
+  const LISTS = { mto: "МТО", hoz: "Хоз", coffee: "Кофе" };
+  let S3 = { tab: "mto", q: "", onlyMiss: false };
+  async function stage3(id) {
+    const [o, N, C] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/norms`), api("GET", `/api/objects/${id}/checklists`)]);
+    const cnt = (l) => (N.shortages[l] || []).length;
+    walkTop(o, id, 3);
+    const tabsH = `<div class="chips">${Object.entries(LISTS).map(([k, n]) => `<button class="chipb ${S3.tab === k ? "on" : ""}" data-tab="${k}">${n} · ${cnt(k)}</button>`).join("")}
+      <button class="chipb ${S3.tab === "st" ? "on" : ""}" data-tab="st">Статусы ●</button><button class="chipb ${S3.tab === "more" ? "on" : ""}" data-tab="more">Батареи и фото</button></div>`;
+    let body = "";
+    if (LISTS[S3.tab]) {
+      const got = N.delivery[S3.tab] || {};
+      let rows = N.norms[S3.tab];
+      if (S3.q) rows = rows.filter((x) => (x.n + ". " + x.name).toLowerCase().includes(S3.q.toLowerCase()));
+      if (S3.onlyMiss) rows = rows.filter((x) => x.norm !== null && (+got[x.n] || 0) < x.norm);
+      body = `${N.survey_missing.length && S3.tab === "mto" ? `<a class="card warnc" href="#o/${id}/survey"><b>Нет данных опроса:</b> ${esc(N.survey_missing.join(", "))} — нормы по этим позициям не посчитаны</a>` : ""}
+        <input id="q" placeholder="Поиск: сетка, ограничитель, 76…" value="${esc(S3.q)}">
+        <div class="row"><label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="om" ${S3.onlyMiss ? "checked" : ""}> Только недовоз</label>
+          <span class="btns"><button class="small" id="all1">Всё пришло</button><button class="small ghost" id="all0">Сбросить</button></span></div>
+        <div class="card" style="gap:0;padding:4px 14px">${rows.map((x) => {
+          const have = +got[x.n] || 0, miss = x.norm === null ? null : Math.max(0, x.norm - have);
+          return `<div class="drow ${miss ? "miss" : miss === 0 ? "full" : ""}">
+            <input type="checkbox" data-full="${x.n}" ${miss === 0 ? "checked" : ""} ${x.norm === null ? "disabled" : ""} aria-label="Пришло полностью">
+            <span class="t"><b>${x.n}. ${esc(x.name)}</b><span>${x.norm === null ? "норма — по опросу" : `норма ${x.norm}${x.note ? " (" + esc(x.note) + ")" : ""} · ${miss ? `<span style="color:var(--warn);font-weight:600">недовоз ${miss}</span>` : "всё на месте"}`}</span></span>
+            ${x.norm === null ? "" : stepper(have, `data-n="${x.n}" data-norm="${x.norm}"`)}</div>`; }).join("") || `<div class="empty">Ничего не найдено</div>`}</div>
+        <span class="sub">Галочка — пришло полностью. Если пришло частично — укажите сколько, недовоз посчитается сам.</span>`;
+    } else if (S3.tab === "st") {
+      const st = C.state || {};
+      body = `<span class="sub">Зелёным — в порядке, оранжевым — критично исправить. «Нет» — пункт не актуален для помещения, в письмо не идёт.</span>
+        ${C.statuses.filter((x) => !x.needs || C.survey[x.needs]).map((x) => { const cur = st[x.key] || {}, state = cur.state || "ok";
+          return `<div class="card stc ${state}" data-st="${x.key}"><textarea rows="1" data-stt="${x.key}" placeholder="${esc(state === "bad" ? x.bad : x.ok)}">${esc(cur.text || (state === "bad" ? x.bad : x.ok))}</textarea>
+          <div class="seg">${[["ok", "В порядке"], ["bad", "Исправить"], ["off", "Нет"]].map(([v, n]) => `<button data-sv="${v}" class="${state === v ? "on" : ""}">${n}</button>`).join("")}</div></div>`; }).join("")}`;
+    } else {
+      const ex = C.extras || {};
+      const bat = ex.batteries || [];
+      const albums = ex.albums || {}, ac = ex.album_count || {};
+      const m2 = ex.module2 || {};
+      body = `<div class="card"><span class="title">Батареи и насосы</span>
+          <div class="btns">${bat.map((g, i) => `<span class="chip info">${g.count} × ${g.sections} секц. <a href="#" data-delb="${i}" style="text-decoration:none">✕</a></span>`).join("")}</div>
+          <div class="row"><input class="num" inputmode="numeric" id="bc" placeholder="кол-во"><span>×</span><input class="num" inputmode="numeric" id="bs" placeholder="секций"><button class="small" id="addb">+ группа</button></div>
+          <span class="sub">В письмо уйдёт: ● КОЛИЧЕСТВО БАТАРЕЙ: ${esc(bat.map((g) => `${g.count}(${g.sections} СЕКЦ.)`).join("+") || "—")}</span>
+          <div class="row"><span>Насосов (сололифтов)</span>${stepper(ex.pumps ?? 0, 'id="pumps"')}</div></div>
+        <div class="card"><span class="title">Высоты</span><div class="grid2">
+          <label class="f">Проём разгрузки, м<input id="hu" inputmode="decimal" value="${esc(ex.height_unloading || "")}" placeholder="2,38"></label>
+          <label class="f">Пандус, м<input id="hr" inputmode="decimal" value="${esc(ex.height_ramp || "")}" placeholder="2,38"></label></div></div>
+        <div class="card"><span class="title">Обязательные фото</span><span class="sub">Фото уходят на Яндекс Диск, ссылка на альбом сама встаёт в письмо</span>
+          ${C.albums.map(([k, t]) => `<div class="row"><span><b style="font-size:14px">${esc(t)}</b><br><span class="sub">${albums[k] ? `фото: ${ac[k] || 1} · <a href="${esc(albums[k])}">открыть</a>` : "нет фото"}</span></span>
+            <label class="btn small">📷<input type="file" accept="image/*" multiple hidden data-album="${k}"></label></div>`).join("")}</div>
+        ${+(C.survey.coffee || 1) === 2 ? `<div class="card"><span class="title">Кофестанция, 2-й модуль</span><span class="sub">Отметьте, что уже есть — остальное уйдёт в «К ДОВОЗУ»</span>
+          ${C.module2.deliver.concat(C.module2.have).map((x) => `<label class="tick" style="font-weight:500"><input type="checkbox" data-m2="${esc(x)}" ${m2[x] ?? C.module2.have.includes(x) ? "checked" : ""}> ${esc(x)}</label>`).join("")}</div>` : ""}
+        <div class="card"><span class="title">Лист готовности (АХЧ)</span><span class="sub">Ссылка на скан — для первого письма</span><input id="ahs" value="${esc(ex.ahch_scan || "")}" placeholder="https://disk.yandex.ru/…"></div>`;
+    }
+    render(tabsH + body + `<a class="btn main" href="#o/${id}/letter/first">К письму →</a>`);
+    $app.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { S3.tab = b.dataset.tab; stage3(id); }));
+    const q = document.getElementById("q"); if (q) q.oninput = () => { S3.q = q.value; clearTimeout(q.t); q.t = setTimeout(() => stage3(id).then(() => { const x = document.getElementById("q"); x.focus(); x.setSelectionRange(99, 99); }), 400); };
+    const om = document.getElementById("om"); if (om) om.onchange = () => { S3.onlyMiss = om.checked; stage3(id); };
+    const setAll = async (v) => { await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, all: v }); stage3(id); };
+    if (document.getElementById("all1")) { document.getElementById("all1").onclick = () => setAll(true); document.getElementById("all0").onclick = () => setAll(false); }
+    $app.querySelectorAll("[data-full]").forEach((c) => (c.onchange = async () => {
+      const row = c.closest(".drow"), st = row.querySelector(".stepper");
+      await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, n: c.dataset.full, have: c.checked ? +st.dataset.norm : 0 }); stage3(id);
+    }));
+    $app.querySelectorAll(".stepper[data-n]").forEach((st) => st.querySelectorAll("button").forEach((b) => (b.onclick = async () => {
+      const v = Math.max(0, +st.querySelector("b").textContent + +b.dataset.d); st.querySelector("b").textContent = v;
+      clearTimeout(st.t); st.t = setTimeout(async () => { await api("PUT", `/api/objects/${id}/delivery`, { list: S3.tab, n: st.dataset.n, have: v }); stage3(id); }, 600);
+    })));
+    $app.querySelectorAll("[data-st]").forEach((card) => {
+      const key = card.dataset.st, ta = card.querySelector("textarea");
+      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }; fit();
+      ta.oninput = fit; ta.onchange = () => api("PUT", `/api/objects/${id}/statuses`, { key, text: ta.value });
+      card.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = async () => { await api("PUT", `/api/objects/${id}/statuses`, { key, state: b.dataset.sv, text: "" }); stage3(id); }));
+    });
+    const ex = C.extras || {};
+    const addb = document.getElementById("addb");
+    if (addb) {
+      addb.onclick = async () => { const c = +document.getElementById("bc").value, s = +document.getElementById("bs").value; if (!c || !s) return toast("Укажите количество и секции");
+        await api("PUT", `/api/objects/${id}/extras`, { batteries: (ex.batteries || []).concat([{ count: c, sections: s }]) }); stage3(id); };
+      $app.querySelectorAll("[data-delb]").forEach((a) => (a.onclick = async (e) => { e.preventDefault(); const b = (ex.batteries || []).slice(); b.splice(+a.dataset.delb, 1); await api("PUT", `/api/objects/${id}/extras`, { batteries: b }); stage3(id); }));
+      const pm = document.getElementById("pumps");
+      pm.querySelectorAll("button").forEach((b) => (b.onclick = async () => { const v = Math.max(0, +pm.querySelector("b").textContent + +b.dataset.d); pm.querySelector("b").textContent = v; await api("PUT", `/api/objects/${id}/extras`, { pumps: v }); }));
+      document.getElementById("hu").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { height_unloading: e.target.value.trim() });
+      document.getElementById("hr").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { height_ramp: e.target.value.trim() });
+      document.getElementById("ahs").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { ahch_scan: e.target.value.trim() });
+      $app.querySelectorAll("[data-m2]").forEach((c) => (c.onchange = async () => { const m = { ...(ex.module2 || {}) }; m[c.dataset.m2] = c.checked; ex.module2 = m; await api("PUT", `/api/objects/${id}/extras`, { module2: m }); }));
+      $app.querySelectorAll("[data-album]").forEach((inp) => (inp.onchange = async () => {
+        for (const f of inp.files) { try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/album/${inp.dataset.album}`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); } }
+        toast("Фото на Диске"); stage3(id);
+      }));
+    }
+  }
+
+  // ---------- опрос перед приёмкой ----------
+  async function surveyScreen(id) {
+    const [o, N] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/norms`)]);
+    const s = N.survey;
+    const mto = Object.fromEntries(N.norms.mto.map((x) => [x.n, x.norm]));
+    top({ back: [`#o/${id}/walk/1`, "Обход"], cap: objLine(o), title: "Опрос перед приёмкой", extra: `<span class="sub">От ответов считаются нормы недовоза и пункты письма</span>` });
+    const num = (k, t, sub) => `<div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><span><b style="font-weight:500">${t}</b><br><span class="sub">${sub}</span></span>${stepper(s[k] ?? 0, `data-k="${k}"`)}</div>`;
+    const tog = (k, t) => `<label class="row" style="padding:10px 0;border-top:1px solid var(--line2)"><span>${t}</span><input type="checkbox" data-b="${k}" ${s[k] ? "checked" : ""} style="width:22px;height:22px;accent-color:var(--accent)"></label>`;
+    render(`<div class="card"><span class="title" style="font-size:14px">Кофемашин</span>${segHtml("coffee", ["1 · обычная КС", "2 · двойная КС"], +s.coffee === 2 ? "2 · двойная КС" : "1 · обычная КС")}</div>
+      <div class="card" style="gap:0">${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
+      <div class="card" style="gap:0">${tog("fresh", "Фреш-полка и кулинария")}${tog("ramp", "Пандус разгрузки")}${tog("entrance_light", "Подсветка входной группы")}${tog("fire_cabinet", "Пожарный шкаф")}</div>
+      <div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px;color:var(--link)">Нормы пересчитаны</b>
+        <span class="sub" style="color:var(--fg)">25. Сетка 250×1600 — ${mto[25] ?? "?"}<br>26. Сетка 1100×500 — ${mto[26] ?? "?"}<br>28. Ограничитель 500×60 — ${mto[28] ?? "?"}<br>76. Корзина для белья 40 л — ${mto[76]}<br>Расходники кофе — набор «${+s.coffee === 2 ? "двойная КС" : "одна КС"}»</span></div>
+      <div class="bottom"><a class="btn main" href="#o/${id}/walk/1">Начать обход</a></div>`);
+    const save = async (patch) => { await api("PUT", `/api/objects/${id}/survey`, patch); surveyScreen(id); };
+    bindSeg("coffee", (v) => save({ coffee: v.startsWith("2") ? 2 : 1 }));
+    $app.querySelectorAll(".stepper[data-k]").forEach((st) => st.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+      const v = Math.max(0, +st.querySelector("b").textContent + +b.dataset.d); st.querySelector("b").textContent = v;
+      clearTimeout(st.t); st.t = setTimeout(() => save({ [st.dataset.k]: v }), 500);
+    })));
+    $app.querySelectorAll("[data-b]").forEach((c) => (c.onchange = () => save({ [c.dataset.b]: c.checked })));
+  }
+
+  // ---------- письмо и редактор апдейта ----------
+  function timerTo(hour, okrug) {
+    const now = new Date();
+    let t;
+    if (okrug === "ЦФО") { const msk = new Date(now.getTime() + (now.getTimezoneOffset() + 180) * 6e4); t = new Date(now.getTime() + ((hour * 60) - (msk.getHours() * 60 + msk.getMinutes())) * 6e4); }
+    else { t = new Date(now); t.setHours(hour, 0, 0, 0); }
+    const m = Math.round((t - now) / 6e4);
+    return m <= 0 ? `после ${hour}:00` : `до ${hour}:00 · ${Math.floor(m / 60) ? Math.floor(m / 60) + " ч " : ""}${m % 60} мин`;
+  }
+  async function copyHtml(html, text) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+      toast("Письмо скопировано — вставьте в Outlook"); return;
+    } catch (e) {}
+    const d = document.createElement("div"); d.contentEditable = "true"; d.innerHTML = html;
+    Object.assign(d.style, { position: "fixed", left: "-9999px", top: "0" }); document.body.appendChild(d);
+    const r = document.createRange(); r.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+    sel.removeAllRanges(); d.remove();
+    toast(ok ? "Письмо скопировано — вставьте в Outlook" : "Не удалось скопировать — нажмите и удерживайте текст письма");
+  }
+  const COMMENT_AUTHORS = ["Жихарева Анастасия", "Ахпашев Мурад", "Координатор строительства"];
+  async function letterScreen(id, mode) {
+    const [o, L, rs] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/letter/${mode}`), api("GET", `/api/objects/${id}/remarks`)]);
+    const ex = o.extras || {};
+    const today = new Date().toISOString().slice(0, 10);
+    const zhOk = ex.zh_ok === today;
+    const warn = [];
+    const noPhoto = rs.filter((r) => !r.photos.length && r.status !== "accepted").length;
+    const noDl = rs.filter((r) => r.needs_deadline).length;
+    if (noPhoto) warn.push(`без фото: ${noPhoto}`);
+    if (noDl) warn.push(`срок уточняется: ${noDl}`);
+    L.cc_missing.forEach((x) => warn.push(x));
+    top({ back: ["#objects", "Объекты"], cap: objLine(o), title: mode === "first" ? "Письмо" : "Апдейт", tabs: [id, "letter"],
+      right: `<span class="chip warn">${timerTo(mode === "first" ? 14 : 10, o.okrug)}</span>`,
+      extra: `${segHtml("lmode", ["Первое письмо", "Апдейт"], mode === "first" ? "Первое письмо" : "Апдейт")}
+        ${L.authors.length ? `<div class="row sub" style="justify-content:flex-start;flex-wrap:wrap;gap:6px">Авторы: ${L.authors.map((a) => `<span class="chip" style="background:${a.bg};color:#16181d">${esc(a.name)}</span>`).join("")}</div>` : ""}` });
+    const open = rs.filter((r) => ["open", "fixed"].includes(r.status));
+    const editor = mode === "update" ? `
+      <div class="card ${zhOk ? "" : "warnc"}"><b>Анастасия Жихарева приняла фото исправлений в МАХ?</b><span class="sub">Без её ответа до 10:00 апдейт не отправляем</span>
+        <div class="btns"><button class="small ${zhOk ? "main" : ""}" id="zhy">Да, приняла</button><button class="small ghost" id="zhn">Ждём ответа</button></div></div>
+      <div class="group">Редактор апдейта</div>
+      ${open.map((r) => `<div class="card upd" data-rid="${r.id}">
+        <div class="row sub"><span>${r.section === "equip" ? "ОБОРУДОВАНИЕ" : "СТРОЙКА"} · №${r.n}${r.deadline ? " · срок " + fmtShort(r.deadline) : ""}</span><span class="chip ${r.status === "fixed" ? "warn" : "info"}">${r.status === "fixed" ? "исправлено" : "открыто"}</span></div>
+        <a href="#o/${id}/r/${r.id}" style="color:inherit;text-decoration:none">${esc(r.text)}</a>
+        ${r.comments.map((c) => `<span class="sub" style="color:${c.color || "var(--muted)"}">– ${esc(c.text)} <i>(${esc(c.author)})</i></span>`).join("")}
+        <div class="btns">${r.status === "open" ? `<button class="small" data-st="fixed">Исправлено</button>` : ""}<button class="small main" data-st="accepted">✓ Принято</button></div>
+        <details><summary class="sub" style="cursor:pointer">+ комментарий из ветки</summary>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px"><select data-ca><option value="">Прогресс / новый срок — оранжевым</option>${COMMENT_AUTHORS.map((a) => `<option>${a}</option>`).join("")}${o.coordinator.name ? `<option>${esc(o.coordinator.name)}</option>` : ""}</select>
+          <textarea rows="2" data-ct placeholder="(сегодня сделают)"></textarea><button class="small" data-cadd>Добавить</button></div></details></div>`).join("") || `<div class="empty">Открытых пунктов нет</div>`}
+      <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="noch" ${ex.nochange ? "checked" : ""}> За сутки ничего не изменилось (оранжевая строка «Замечания по строительной части»)</label>` : "";
+    render(`${warn.length ? `<div class="card warnc"><b>Проверьте перед отправкой</b><span class="sub">${esc(warn.join(" · "))}</span></div>` : ""}
+      ${editor}
+      <div class="group">${mode === "first" ? "Письмо в вёрстке шаблона" : "Апдейт — предпросмотр"}</div>
+      <div class="paper" id="paper">${L.html_app}</div>
+      <details class="card"><summary class="title" style="cursor:pointer">Получатели · ${1 + L.cc.length}</summary>
+        <span class="sub"><b>Кому:</b> ${L.to.map(([n, e]) => esc(n) + " &lt;" + esc(e) + "&gt;").join(", ")}</span>
+        <span class="sub"><b>Копия:</b> ${L.cc.map(([n, e]) => esc(n) + " &lt;" + esc(e) + "&gt;").join(", ")}</span>
+        <span class="sub"><b>Тема:</b> ${esc(L.subject)}</span>
+        <div class="btns"><button class="small ghost" id="cpTo">Скопировать адреса</button><button class="small ghost" id="cpSubj">Скопировать тему</button></div></details>
+      <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="shg" ${ex.show_received ? "checked" : ""}> В недовозах писать «(вместо N пришло M)»</label>
+      <div class="bottom" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="main" id="copyL">Скопировать письмо</button><button id="mail">Открыть почту</button></div>`);
+    bindSeg("lmode", (v) => (location.hash = `#o/${id}/letter/${v === "Апдейт" ? "update" : "first"}`));
+    document.getElementById("copyL").onclick = () => copyHtml(L.html, L.text);
+    document.getElementById("mail").onclick = () => { copyHtml(L.html, L.text); setTimeout(() => go(L.mailto), 400); };
+    document.getElementById("cpTo").onclick = () => copy(L.to.concat(L.cc).map((x) => x[1]).join("; "));
+    document.getElementById("cpSubj").onclick = () => copy(L.subject);
+    document.getElementById("shg").onchange = async (e) => { await api("PUT", `/api/objects/${id}/extras`, { show_received: e.target.checked }); letterScreen(id, mode); };
+    $app.querySelectorAll("#paper [data-rid]").forEach((el) => (el.onclick = () => (location.hash = `#o/${id}/r/${el.dataset.rid}`)));
+    if (mode === "update") {
+      document.getElementById("zhy").onclick = async () => { await api("PUT", `/api/objects/${id}/extras`, { zh_ok: today }); letterScreen(id, mode); };
+      document.getElementById("zhn").onclick = async () => { await api("PUT", `/api/objects/${id}/extras`, { zh_ok: "" }); letterScreen(id, mode); };
+      document.getElementById("noch").onchange = async (e) => { await api("PUT", `/api/objects/${id}/extras`, { nochange: e.target.checked }); letterScreen(id, mode); };
+      $app.querySelectorAll(".upd").forEach((card) => {
+        const rid = card.dataset.rid;
+        card.querySelectorAll("[data-st]").forEach((b) => (b.onclick = async () => { try { await api("POST", `/api/objects/${id}/remarks/${rid}/status`, { status: b.dataset.st }); letterScreen(id, mode); } catch (e) { toast(e.message); } }));
+        card.querySelector("[data-cadd]").onclick = async () => {
+          const a = card.querySelector("[data-ca]").value, t = card.querySelector("[data-ct]").value.trim(); if (!t) return;
+          await api("POST", `/api/objects/${id}/remarks/${rid}/comment`, a ? { author: a, text: t } : { text: t, progress: true }); letterScreen(id, mode);
+        };
+      });
+    }
+  }
+
+  // ---------- замечание ----------
   function statusChip(s) {
     return { open: "", fixed: `<span class="chip warn">исправлено, ждёт подтверждения</span>`, accepted: `<span class="chip ok">принято</span>`, fixed_on_site: `<span class="chip ok">устранено в ходе приёмки</span>` }[s] || "";
   }
-
   async function remarkForm(id, stage, zi, rid) {
     const [o, people, all] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/people`), rid ? api("GET", `/api/objects/${id}/remarks`) : []]);
-    const r = rid ? all.find((x) => x.id === rid) : { section: "build", zone: ZONES[zi], text: "", deadline: "", deadline_ask: "", photos: [], stage, comments: [], deadline_history: [], status: "open" };
+    let pre = {}; if (!rid) { try { pre = JSON.parse(sessionStorage.getItem("newRemark") || "{}"); sessionStorage.removeItem("newRemark"); } catch (e) {} }
+    const r = rid ? all.find((x) => x.id === rid) : { section: pre.section || (stage == 2 ? "equip" : "build"), zone: pre.zone || ZONES[zi] || ZONES[0], text: pre.text || "", phrase: "", deadline: "", deadline_ask: "", deadline_text: "", photos: [], stage, comments: [], deadline_history: [], status: "open", item_ref: pre.item_ref || "" };
     if (!r) throw new Error("замечание не найдено");
-    const back = `#o/${id}/zone/${r.stage}/${ZONES.indexOf(r.zone)}`;
+    const back = `#o/${id}/walk/${r.stage || 1}`;
     const opt = (sel) => people.map((p) => `<option value="${esc(p.name)}" data-e="${esc(p.email)}" ${p.name === sel ? "selected" : ""}>${esc(p.name)} — ${esc(p.role)}</option>`).join("");
-    const today = new Date(), iso = (d) => d.toISOString().slice(0, 10), tmr = new Date(today.getTime() + 864e5);
-    top({ back: [back, r.zone], cap: objLine(o), title: rid ? "Замечание " + r.n : "Новое замечание" });
+    const iso = (d) => d.toISOString().slice(0, 10), td = new Date(), tm = new Date(td.getTime() + 864e5);
+    top({ back: [back, "Обход"], cap: objLine(o), title: rid ? `Замечание №${r.n}` : "Новое замечание" });
     render(`${segHtml("sec", ["Стройка", "Оборудование"], r.section === "equip" ? "Оборудование" : "Стройка")}
-      <div class="card"><label class="f">ЧТО СДЕЛАТЬ / ГДЕ<textarea id="text" rows="3" placeholder="Утопить грязезащитную решётку в тамбуре">${esc(r.text)}</textarea></label>
-      <label class="f">Фраза-ссылка на фото<input id="phrase" value="${esc(r.phrase || "")}" placeholder="по умолчанию — от первого глагола"></label></div>
+      <label class="f">Зона<select id="zone">${ZONES.map((z) => `<option ${z === r.zone ? "selected" : ""}>${z}</option>`).join("")}</select></label>
+      ${pre.hint ? `<div class="note">Пункт чек-листа: ${esc(pre.hint)}</div>` : ""}
+      <div class="card"><span class="kicker">Что сделать / где</span><textarea id="text" rows="3" placeholder="Подкрасить плитку армстронг в тамбуре">${esc(r.text)}</textarea>
+        <span class="kicker">Ссылка на фото — коснитесь начала и конца фразы</span><div class="words" id="words"></div></div>
       <div class="card"><span class="title">Фото · ${r.photos.length}</span>
         ${r.photos.length ? `<div class="btns">${r.photos.map((p, i) => `<a class="chip ok" href="${esc(p.url)}">фото ${i + 1}</a>`).join("")}</div>` : ""}
-        ${rid ? `<label class="btn">📷 Добавить фото<input type="file" accept="image/*" capture="environment" id="photo" hidden multiple></label>` : `<span class="sub">Фото — сразу после сохранения</span>`}</div>
-      <div class="card warnc"><span class="kicker" style="color:var(--warn)">Срок устранения · обязательно</span>
-        <div class="btns"><button class="small ghost" data-day="${iso(today)}">Сегодня</button><button class="small ghost" data-day="${iso(tmr)}">Завтра ${fmtShort(iso(tmr))}</button></div>
-        <div class="grid2"><label class="f">Дата<input type="date" id="deadline" value="${r.deadline || ""}"></label>
-        <label class="f">или уточняется у<select id="ask"><option value="">—</option>${opt(r.deadline_ask)}</select></label></div>
-        ${rid && r.deadline ? `<label class="f">Причина переноса (если меняете дату)<input id="reason"></label>` : ""}
+        ${rid ? `<label class="btn">📷 Добавить фото<input type="file" accept="image/*" id="photo" hidden multiple></label>` : `<span class="sub">Фото — сразу после сохранения (камера или галерея), они уйдут на Яндекс Диск</span>`}</div>
+      <div class="card ${r.deadline || r.deadline_text || r.question ? "" : "warnc"}"><span class="kicker" style="color:var(--warn)">Срок устранения · обязательно</span>
+        <div class="btns"><button class="small ghost" data-day="${iso(td)}">Сегодня</button><button class="small ghost" data-day="${iso(tm)}">Завтра ${fmtShort(iso(tm))}</button><button class="small ghost" id="pmp">По мере поступления</button></div>
+        <label class="f">Дата<input type="date" id="deadline" value="${r.deadline || ""}"></label>
+        <input id="dtext" type="hidden" value="${esc(r.deadline_text || "")}">${r.deadline_text ? `<span class="chip info">${esc(r.deadline_text)}</span>` : ""}
+        <label class="f">или срок уточняется у<select id="ask"><option value="">—</option>${opt(r.deadline_ask)}</select></label>
+        ${rid && r.deadline ? `<label class="f">Причина переноса (если меняете дату)<input id="reason" placeholder="без причины — даты пойдут в строку"></label>` : ""}
         ${r.deadline_history.length ? `<span class="sub" style="color:var(--warn)">Переносы: ${r.deadline_history.map((h) => fmt(h.date) + (h.reason ? " — " + esc(h.reason) : "")).join("; ")}</span>` : ""}
-        <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="q" ${r.question ? "checked" : ""}>Вопрос на согласование (без срока)</label></div>
-      <label class="f">Ответственный (оборудование)<select id="resp"><option value="">—</option>${opt(r.responsible)}</select></label>
-      ${rid ? "" : `<label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="fos">Устранено в ходе приёмки</label>`}
-      ${rid ? `<div class="card"><span class="title">Статус</span><div class="btns">
-        <button class="small" data-st="fixed">Исправлено</button><button class="small" data-st="accepted">Принято</button><button class="small ghost" data-st="open">Открыть снова</button></div>
-        ${statusChip(r.status)}</div>
+        <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="q" ${r.question ? "checked" : ""}>Вопрос на согласование (срок не обязателен)</label></div>
+      <label class="f">Ответственный${r.section === "equip" ? "" : " (если нужен)"}<select id="resp"><option value="">—</option>${opt(r.responsible)}</select></label>
+      ${rid ? "" : `<label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="fos">Устранено в ходе приёмки (в первое письмо — зелёным, в апдейты не идёт)</label>`}
+      ${rid ? `<div class="card"><span class="title">Статус</span>${statusChip(r.status)}<div class="btns">
+        <button class="small" data-st="fixed">Исправлено</button><button class="small main" data-st="accepted">✓ Принято</button><button class="small ghost" data-st="open">Открыть снова</button></div></div>
         <div class="card"><span class="title">Комментарии</span>
-        ${r.comments.map((c) => `<div class="sub"><b>${esc(c.author)}</b> · ${fmt(c.date)}: ${esc(c.text)}</div>`).join("")}
+        ${r.comments.map((c) => `<div class="sub" style="color:${c.color || "inherit"}"><b>${esc(c.author)}</b> · ${fmt(c.date)}: ${esc(c.text)}</div>`).join("")}
+        <select id="ca"><option value="">Прогресс / новый срок — оранжевым</option>${COMMENT_AUTHORS.map((a) => `<option>${a}</option>`).join("")}${o.coordinator.name ? `<option>${esc(o.coordinator.name)}</option>` : ""}</select>
         <textarea id="cm" rows="2" placeholder="Ответ из ветки, прогресс («сегодня сделают»)"></textarea><button class="small" id="addc">Добавить</button></div>` : ""}
       <div class="bottom"><button class="main" id="save">${rid ? "Сохранить" : "Сохранить и добавить фото"}</button></div>`);
     bindSeg("sec");
-    $app.querySelectorAll("[data-day]").forEach((b) => (b.onclick = () => { document.getElementById("deadline").value = b.dataset.day; }));
+    // фраза-ссылка плашками: первое касание — начало, второе — конец
+    let phrase = r.phrase || "", startI = null;
+    const words = () => document.getElementById("text").value.split(/\s+/).filter(Boolean);
+    function drawWords() {
+      const w = words(); const ph = phrase.split(/\s+/).filter(Boolean);
+      let s = -1; for (let i = 0; i + ph.length <= w.length && ph.length; i++) if (w.slice(i, i + ph.length).join(" ").toLowerCase() === ph.join(" ").toLowerCase()) { s = i; break; }
+      document.getElementById("words").innerHTML = w.map((x, i) => `<button type="button" class="w ${s >= 0 && i >= s && i < s + ph.length ? "on" : ""} ${startI === i ? "start" : ""}" data-w="${i}">${esc(x)}</button>`).join("") || `<span class="sub">Сначала напишите текст</span>`;
+      document.querySelectorAll("[data-w]").forEach((b) => (b.onclick = () => {
+        const i = +b.dataset.w;
+        if (startI === null) { startI = i; phrase = w[i]; } else { const a = Math.min(startI, i), z = Math.max(startI, i); phrase = w.slice(a, z + 1).join(" "); startI = null; }
+        drawWords();
+      }));
+    }
+    const ta = document.getElementById("text");
+    // по умолчанию — от первого глагола до «;» (как в ТЗ), пока руководитель не выбрал плашками сам
+    let manual = !!r.phrase;
+    const defPhrase = () => { const v = ta.value, m = v.match(/[А-Яа-яЁё]+(?:ть|ти|чь)(?:ся)?(?=[\s,.;]|$)/); return m ? v.slice(m.index).split(";")[0].trim().replace(/[.,]$/, "") : v.split(";")[0].trim(); };
+    ta.addEventListener("input", () => { if (!manual) phrase = defPhrase(); drawWords(); });
+    document.getElementById("words").addEventListener("click", () => (manual = true));
+    if (!phrase && ta.value) phrase = defPhrase();
+    drawWords();
+    $app.querySelectorAll("[data-day]").forEach((b) => (b.onclick = () => { document.getElementById("deadline").value = b.dataset.day; document.getElementById("dtext").value = ""; }));
+    document.getElementById("pmp").onclick = () => { document.getElementById("dtext").value = "по мере поступления"; document.getElementById("deadline").value = ""; toast("Срок: по мере поступления"); };
     const respSel = document.getElementById("resp");
     document.getElementById("save").onclick = async () => {
-      const ask = document.getElementById("ask"), rs = respSel.selectedOptions[0];
-      const body = { section: segVal("sec") === "Оборудование" ? "equip" : "build", zone: r.zone, stage: r.stage, text: document.getElementById("text").value,
-        phrase: document.getElementById("phrase").value, deadline: document.getElementById("deadline").value,
-        deadline_ask: document.getElementById("deadline").value ? "" : ask.value, question: document.getElementById("q").checked,
-        responsible: respSel.value, responsible_email: rs ? rs.dataset.e || "" : "" };
+      const ask = document.getElementById("ask"), rs = respSel.selectedOptions[0], dl = document.getElementById("deadline").value, dt = document.getElementById("dtext").value;
+      const body = { section: segVal("sec") === "Оборудование" ? "equip" : "build", zone: document.getElementById("zone").value, stage: r.stage || stage, text: ta.value,
+        phrase, deadline: dl, deadline_text: dl ? "" : dt, deadline_ask: dl || dt ? "" : ask.value, question: document.getElementById("q").checked,
+        responsible: respSel.value, responsible_email: rs ? rs.dataset.e || "" : "", item_ref: r.item_ref || "" };
       const rsn = document.getElementById("reason"); if (rsn) body.reason = rsn.value;
       const fos = document.getElementById("fos"); if (fos && fos.checked) body.fixed_on_site = true;
       try {
@@ -499,16 +809,14 @@
     };
     const ph = document.getElementById("photo");
     if (ph) ph.onchange = async () => {
-      for (const f of ph.files) {
-        try { toast("Загружаю фото на Диск…"); await api("POST", `/api/objects/${id}/remarks/${rid}/photo`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); }
-      }
+      for (const f of ph.files) { try { toast("Загружаю фото на Диск…"); await api("POST", `/api/objects/${id}/remarks/${rid}/photo`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); } }
       remarkForm(id, stage, zi, rid);
     };
     $app.querySelectorAll("[data-st]").forEach((b) => (b.onclick = async () => { try { await api("POST", `/api/objects/${id}/remarks/${rid}/status`, { status: b.dataset.st }); remarkForm(id, stage, zi, rid); } catch (e) { toast(e.message); } }));
     const addc = document.getElementById("addc");
-    if (addc) addc.onclick = async () => { await api("POST", `/api/objects/${id}/remarks/${rid}/comment`, { text: document.getElementById("cm").value }); remarkForm(id, stage, zi, rid); };
+    if (addc) addc.onclick = async () => { const a = document.getElementById("ca").value; await api("POST", `/api/objects/${id}/remarks/${rid}/comment`, a ? { author: a, text: document.getElementById("cm").value } : { text: document.getElementById("cm").value, progress: true }); remarkForm(id, stage, zi, rid); };
   }
-  function shrink(file, max = 1600) {
+  function shrink(file, max = 1800) {
     return new Promise((res, rej) => {
       const img = new Image(); img.onerror = rej;
       img.onload = () => { const k = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas");
@@ -528,12 +836,14 @@
       if (h === "instr" || h === "memo") return await instrScreen(null);
       if (m && !m[2]) return await prep(m[1]);
       if (m && m[2] === "data") return await dataScreen(m[1]);
+      if (m && m[2] === "survey") return await surveyScreen(m[1]);
       if (m && m[2] === "instr") return await instrScreen(m[1]);
       if (m && m[2] === "contracts") return await contractsScreen(m[1]);
       if (m && m[2] === "ahch") return await ahchScreen(m[1]);
       if (m && m[2] === "dvornik") return await dvornikScreen(m[1]);
-      if (m && m[2] === "walk") return await walkScreen(m[1], m[3] || 1);
-      if (m && m[2] === "zone") return await zoneScreen(m[1], m[3], +m[4]);
+      if (m && m[2] === "letter") return await letterScreen(m[1], m[3] === "update" ? "update" : "first");
+      if (m && m[2] === "walk") { const s = +(m[3] || 1); return await (s === 3 ? stage3 : s === 2 ? stage2 : stage1)(m[1]); }
+      if (m && m[2] === "zone") return await stage1(m[1]);
       if (m && m[2] === "rnew") return await remarkForm(m[1], +m[3], +m[4], null);
       if (m && m[2] === "r") return await remarkForm(m[1], 1, 0, m[3]);
       await objects();

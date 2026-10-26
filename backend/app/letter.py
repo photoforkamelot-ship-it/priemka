@@ -158,33 +158,39 @@ def remark_line(n: int, r: Remark, obj: StoreObject, mode: str) -> tuple[str, st
         body_h = esc(text)
     body_t = text
     tail_h, tail_t, extra = "", "", []
+    who_h = who_t = ""
     if r.section == "equip" and r.responsible:
         who = f"@{r.responsible}"
-        link = f'<a href="mailto:{esc(r.responsible_email)}">{esc(who)}</a>' if r.responsible_email else esc(who)
-        tail_h += f" – {link}"; tail_t += f" – {who}"
-    if r.question:
-        pass
+        who_h = f'<a href="mailto:{esc(r.responsible_email)}">{esc(who)}</a>' if r.responsible_email else esc(who)
+        who_t = who
+    if r.question or (not r.deadline and not r.deadline_text and not r.deadline_ask):
+        if who_h:   # вопрос ответственному — «просьба прокомментировать»
+            nm = r.responsible.split()[1] if len(r.responsible.split()) > 1 else ""
+            tail_h += f"; {who_h} {esc(nm)}, просьба прокомментировать"; tail_t += f"; {who_t} {nm}, просьба прокомментировать"
     elif r.deadline_text:
-        tail_h += f". Срок — {esc(r.deadline_text)}"; tail_t += f". Срок — {r.deadline_text}"
+        tail_h += f"; Срок — {esc(r.deadline_text)}"; tail_t += f"; Срок — {r.deadline_text}"
     elif r.deadline:
         hist = r.deadline_history
         if hist and not any(h.get("reason") for h in hist):
             dates = ", ".join(fmt(h["date"]) for h in hist) + ", " + fmt(r.deadline)
-            tail_h += f". Срок {dates}"; tail_t += f". Срок {dates}"
+            tail_h += f"; Срок {dates}"; tail_t += f"; Срок {dates}"
         elif hist:
-            first = hist[0]["date"]
-            tail_h += f". Срок {fmt(first)}"; tail_t += f". Срок {fmt(first)}"
-            # причина хранится у переноса: «старый срок → новый срок, причина»
-            reasons = [h.get("reason", "") for h in hist]
+            tail_h += f"; Срок {fmt(hist[0]['date'])}"; tail_t += f"; Срок {fmt(hist[0]['date'])}"
+            # причина хранится у переноса: каждый новый срок — с новой строки оранжевым
             new_dates = [h["date"] for h in hist[1:]] + [r.deadline]
-            for d, why in zip(new_dates, reasons):
+            for d, h in zip(new_dates, hist):
+                why = h.get("reason", "")
                 line = f"Новый срок {fmt(d)}" + (f" — ({why})" if why else "")
                 extra.append((color(esc(line), ORANGE), line))
         else:
-            tail_h += f". Срок {fmt(r.deadline)}"; tail_t += f". Срок {fmt(r.deadline)}"
+            tail_h += f"; Срок {fmt(r.deadline)}"; tail_t += f"; Срок {fmt(r.deadline)}"
+        if who_h:
+            tail_h += f" – {who_h}"; tail_t += f" – {who_t}"
     elif r.deadline_ask:
-        line = f". Срок — уточните у {first_last(r.deadline_ask)}"
+        line = f"; Срок — уточните у {first_last(r.deadline_ask)}"
         tail_h += color(esc(line), ORANGE); tail_t += line
+        if who_h:
+            tail_h += f" – {who_h}"; tail_t += f" – {who_t}"
     if r.status == "fixed_on_site" and mode == "first":
         tail_h += color(" – устранено в ходе приёмки", GREEN); tail_t += " – устранено в ходе приёмки"
     for c in r.comments:

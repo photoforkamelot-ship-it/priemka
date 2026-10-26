@@ -36,8 +36,8 @@ def test_first_letter_sections_and_numbering():
     L = letter.build(o, "first", date(2026, 11, 5))
     t = L["text"]
     assert t.startswith("Коллеги, Добрый день!") and "В процессе приёмки выявлены:" in t
-    assert "1. Установить водосточные трубы согласно ТЗ. Срок 06.11.2026" in t
-    assert "2. Устранить протечку под сифоном. Срок — уточните у Андрея Казакова" in t
+    assert "1. Установить водосточные трубы согласно ТЗ; Срок 06.11.2026" in t
+    assert "2. Устранить протечку под сифоном; Срок — уточните у Андрея Казакова" in t
     assert "3. Принимаем такое исполнение?" in t                    # вопрос — в конце списка
     assert "3. Короба для мороженого, 5шт – 4;" in t                 # номер позиции из шаблона сохранён
     assert '<a href="https://disk.yandex.ru/i/x">Установить водосточные трубы согласно ТЗ</a>' in L["html"]
@@ -55,7 +55,7 @@ def test_update_rules():
     rm.update(b, {"deadline": "2026-11-08", "reason": "нет плитки"})
     rm.add_comment(b, "Жихарева Анастасия", "фото до/после в МАХ")
     t = letter.build(o, "update", date(2026, 11, 7))["text"]
-    assert "К исправлению:" in t and "Срок 06.11.2026" in t and "Новый срок 08.11.2026 — (нет плитки)" in t
+    assert "К исправлению:" in t and "; Срок 06.11.2026" in t and "Новый срок 08.11.2026 — (нет плитки)" in t
     rm.set_status(a, "accepted", is_owner=True)
     t = letter.build(o, "update", date(2026, 11, 7))["text"]
     assert "Покрасить отливы" not in t and "1. Заменить плитку" in t     # принятое уходит, нумерация пересчитана
