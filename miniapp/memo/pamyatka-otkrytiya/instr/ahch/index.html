@@ -1,0 +1,193 @@
+<title>Заявка АХЧ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column worksheet — steps strip, editable task list, live request preview with copy */
+:root{
+  --bg:#f3f5f8; --card:#ffffff; --line:#d9dee7; --fg:#18202b; --muted:#5d6878;
+  --accent:#d6330f; --accent-soft:#fde9e3; --ok:#14804a; --ok-soft:#e1f4e9;
+  --font:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161c; --card:#1b2129; --line:#2d3540; --fg:#e8ecf2; --muted:#9aa5b4;
+  --accent:#ff6a45; --accent-soft:#3a1f19; --ok:#4cc985; --ok-soft:#163324; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161c; --card:#1b2129; --line:#2d3540; --fg:#e8ecf2; --muted:#9aa5b4;
+  --accent:#ff6a45; --accent-soft:#3a1f19; --ok:#4cc985; --ok-soft:#163324; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+textarea.txt{resize:none;overflow:hidden;line-height:1.4;min-height:38px}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+h1{font-size:clamp(24px,4vw,30px);font-weight:800;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:17px;font-weight:700;margin:0;text-wrap:balance}
+.lead{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.label{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.path{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:600}
+.path span{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px 9px}
+.path i{font-style:normal;color:var(--muted)}
+.note{background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:var(--r);padding:12px 14px}
+.note b{color:var(--accent)}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row.off .txt{color:var(--muted);text-decoration:line-through}
+input[type=text],input[type=number],select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+input[type=number]{text-align:center;font-variant-numeric:tabular-nums}
+input[type=checkbox]{width:20px;height:20px;margin-top:9px;accent-color:var(--accent)}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:8px 12px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.del{border:0;background:transparent;color:var(--muted);font-size:20px;line-height:1;padding:6px 8px}
+.del:hover{color:var(--accent)}
+.add{display:grid;grid-template-columns:1fr auto;gap:8px}
+.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.grid3{display:grid;grid-template-columns:120px 1fr 170px;gap:10px}
+.grid3 label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600}
+pre{font-family:var(--mono);font-size:13px;white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin:0;max-height:none}
+.toast{color:var(--ok);background:var(--ok-soft);border-radius:8px;padding:6px 10px;font-weight:600}
+ol.steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
+ol.steps li::marker{font-weight:800;color:var(--accent)}
+.muted{color:var(--muted);font-size:13px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button[aria-checked="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.rbox{display:flex;flex-direction:column;gap:10px}
+.phones{display:flex;flex-wrap:wrap;gap:8px}
+.ph{font-family:var(--mono);font-weight:600;font-size:15px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;user-select:all;font-variant-numeric:tabular-nums}
+@media (max-width:560px){.grid3{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Заявка АХЧ на открытие</h1>
+    <p class="lead">Выберите регион, отметьте нужные работы, поправьте или добавьте свои пункты — внизу соберётся готовый текст заявки по образцу. Скопируйте его и отправьте.</p>
+  </header>
+
+  <div class="note"><b>Договориться с АХЧ — создать заявку</b> на мелкие работы перед открытием. Все работы одной общей заявкой, по пунктам. Что есть в наличии и чего нет — пишите прямо в пункте.</div>
+
+  <section class="card" aria-labelledby="h-where">
+    <h2 id="h-where">Куда отправлять</h2>
+    <div class="seg" role="radiogroup" aria-label="Регион">
+      <button type="button" data-r="sfo" role="radio">СФО</button>
+      <button type="button" data-r="cfo" role="radio">ЦФО</button>
+      <button type="button" data-r="tk" role="radio">Тверь / Калуга</button>
+    </div>
+    <div id="r-sfo" class="rbox">
+      <div class="path"><span>Ярче Коммуникации</span><i>→</i><span>Помощь</span><i>→</i><span>Заявки по АХЧ</span><i>→</i><span>Создать</span></div>
+      <ol class="steps">
+        <li><b>Срочность</b> — «Срочная (в течение рабочего дня)» → «Готово» → «Далее».</li>
+        <li><b>Описание неисправности</b> — вставьте скопированный текст → «Далее».</li>
+        <li><b>Фото</b> — места, где вешать/ставить → «Далее».</li>
+        <li>Проверьте и нажмите <b>«Создать»</b> — заявка уйдёт подрядчику в статусе «Открыто».</li>
+        <li>После работ придёт опрос «Подтвердите выполнение» — если сделано не всё, отвечайте «не в полном объёме» и пишите в комментарии, что не сделано.</li>
+      </ol>
+    </div>
+    <div id="r-cfo" class="rbox" hidden>
+      <p style="margin:0">Связаться с АХЧ <b>в WhatsApp</b>: скопируйте текст ниже и отправьте — дата, срочность и список работ уже в нём.</p>
+    </div>
+    <div id="r-tk" class="rbox" hidden>
+      <p style="margin:0">Связаться с АХЧ <b>почтой</b> — отправьте скопированный текст письмом.</p>
+      <div class="muted" style="font-weight:600">Кому</div>
+      <div class="phones"><span class="ph">N.mazurova@vianservis.ru</span><span class="ph">e.nikitin@ya-retail.ru</span></div>
+      <div class="muted" style="font-weight:600">Тема</div>
+      <div class="phones"><span class="ph" id="subj">Заявка на АХЧ работы. Магазин М___</span></div>
+      <p style="margin:0"><b>Обязательно узнайте номер заявки</b> по телефону — Наталья:</p>
+      <div class="phones"><span class="ph">8-916-590-34-57</span><span class="ph">8-926-788-99-15</span></div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-list">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <h2 id="h-list">Список работ</h2>
+      <button type="button" id="reset">Вернуть исходный список</button>
+    </div>
+    <div class="muted">Галочка — пункт попадёт в заявку. Текст правится прямо в строке: количество, место, «в наличии / нет в наличии».</div>
+    <div id="list"></div>
+    <div class="add">
+      <input type="text" id="newText" placeholder="Новый пункт, например: повесить часы в зале - 1 шт" aria-label="Текст нового пункта">
+      <button type="button" id="addBtn">Добавить</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-out">
+    <h2 id="h-out">Текст заявки</h2>
+    <div class="grid3">
+      <label for="code">Код магазина<input type="text" id="code" placeholder="М001"></label>
+      <label for="shop">Адрес<input type="text" id="shop" placeholder="г. Москва, ул. Московская, 1"></label>
+      <label for="date">Просьба приехать<input type="date" id="date"></label>
+    </div>
+    <label for="extra" class="muted" style="display:flex;flex-direction:column;gap:4px;font-weight:600">Комментарий (необязательно)
+      <textarea id="extra" rows="2" placeholder="Например: ключи у директора, контакт на объекте 8-900-000-00-00"></textarea></label>
+    <pre id="out" aria-live="polite"></pre>
+    <div class="btns"><button type="button" class="primary" id="copy">Скопировать текст</button><span id="toast" class="toast" hidden>Скопировано</span></div>
+  </section>
+</div>
+
+<script>
+const DEFAULT=[
+ "Установить полку в сейф (нет в наличии)",
+ "Установить диспенсеры для мыла - 2 шт",
+ "Повесить зеркало в сан узле",
+ "Установить диспенсеры для полотенец - 2 шт",
+ "Установить держатель для туалетной бумаги - 1 шт",
+ "Прикрепить сейф на 2 анкера (сейф в наличии)",
+ "Прикрепить крючки - 3 шт. в дневном накопителе, 1 шт. в пекарне, 3 шт на кассы (нет в наличии)",
+ "Повесить гигрометры - 2 шт",
+ "Установить 3 держателя для щипцов",
+ "Собрать рециркулятор",
+ "Установить урну - у входа",
+ "Собрать 2 шпильки - в зоне выпечки",
+ "Скрутить стеллажи/торцы, где есть возможность",
+ "Скрутить кабинки между собой в кабинете директора",
+ "Разместить 2 плана эвакуации",
+ "Собрать 2 подставки для огнетушителя"
+];
+const K="ahch_v2";
+function LSg(){try{return JSON.parse(localStorage.getItem(K))}catch(e){return null}}
+function LSs(v){try{localStorage.setItem(K,JSON.stringify(v))}catch(e){}}
+const fresh=()=>DEFAULT.map(t=>({t,on:true}));
+let st=Object.assign({items:fresh(),code:"",shop:"",date:"",extra:"",reg:"sfo"},LSg()||{});
+const $=id=>document.getElementById(id);
+function save(){LSs(st)}
+function render(){
+  const L=$("list");L.innerHTML="";
+  st.items.forEach((it,i)=>{
+    const r=document.createElement("div");r.className="row"+(it.on?"":" off");
+    r.innerHTML=`<input type="checkbox" id="c${i}" ${it.on?"checked":""} aria-label="Включить пункт">
+    <textarea class="txt" id="t${i}" rows="1" aria-label="Текст пункта"></textarea>
+    <button type="button" class="del" aria-label="Удалить пункт">×</button>`;
+    r.querySelector(".txt").value=it.t;
+    r.querySelector("[type=checkbox]").onchange=e=>{it.on=e.target.checked;r.classList.toggle("off",!it.on);upd()};
+    const ta=r.querySelector(".txt");const fit=()=>{ta.style.height="auto";ta.style.height=ta.scrollHeight+"px"};ta.oninput=e=>{it.t=e.target.value;fit();upd()};requestAnimationFrame(fit);
+    r.querySelector(".del").onclick=()=>{st.items.splice(i,1);render()};
+    L.appendChild(r);
+  });
+  upd();
+}
+function fmtDate(d){if(!d)return "__.__.____";const [y,m,dd]=d.split("-");return `${dd}.${m}.${y}`}
+function text(){
+  const on=st.items.filter(x=>x.on&&x.t.trim());
+  const place=[st.code.trim(),st.shop.trim()].filter(Boolean).join(", ")||"<код магазина>, <адрес>";
+  let s=`Добрый день,\n${place}\nЗАЯВКА СРОЧНАЯ (ЗАПУСК МАГАЗИНА)\nПросьба приехать ${fmtDate(st.date)}\n\n`;
+  s+=on.length?on.map((x,i)=>`${i+1}. ${x.t.trim()}`).join("\n"):"(отметьте хотя бы один пункт)";
+  if(st.extra.trim()) s+=`\n\n${st.extra.trim()}`;
+  return s;
+}
+function upd(){$("out").textContent=text();$("subj").textContent="Заявка на АХЧ работы. Магазин "+(st.code.trim()||"М___");save()}
+function setReg(r){st.reg=r;document.querySelectorAll(".seg button").forEach(b=>b.setAttribute("aria-checked",b.dataset.r===r));["sfo","cfo","tk"].forEach(k=>$("r-"+k).hidden=k!==r);save()}
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>setReg(b.dataset.r));
+["code","shop","date","extra"].forEach(k=>{$(k).value=st[k];$(k).oninput=e=>{st[k]=e.target.value;upd()}});
+function add(){const t=$("newText").value.trim();if(!t)return;st.items.push({t,on:true});$("newText").value="";render();$("newText").focus()}
+$("addBtn").onclick=add;$("newText").onkeydown=e=>{if(e.key==="Enter")add()};
+$("reset").onclick=()=>{st.items=fresh();render()};
+$("copy").onclick=()=>{
+  const s=text(),done=()=>{const t=$("toast");t.hidden=false;clearTimeout(window._tt);window._tt=setTimeout(()=>t.hidden=true,2200)};
+  const sel=()=>{const r=document.createRange();r.selectNodeContents($("out"));const g=getSelection();g.removeAllRanges();g.addRange(r);$("toast").textContent="Текст выделен — скопируйте вручную";done()};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(s).then(()=>{$("toast").textContent="Скопировано";done()},sel)}else sel();
+};
+setReg(st.reg);render();
+window.addEventListener('resize',()=>document.querySelectorAll('textarea.txt').forEach(t=>{t.style.height='auto';t.style.height=t.scrollHeight+'px'}));
+</script>

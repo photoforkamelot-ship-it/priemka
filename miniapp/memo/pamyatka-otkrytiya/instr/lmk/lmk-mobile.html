@@ -1,0 +1,1177 @@
+<!DOCTYPE html><html lang="ru" data-mode="auto"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ЛМК-Контроль с телефона</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+    
+    :root{
+      /* Color tokens */
+      --bg0:#050816;
+      --bg1:#070b1f;
+      --bg2:#0b1230;
+
+      --card: rgba(255,255,255,.06);
+      --card2: rgba(255,255,255,.08);
+      --border: rgba(255,255,255,.10);
+
+      --text:#eaf0ff;
+      --muted: rgba(234,240,255,.70);
+
+      --accent:#7dd3fc;
+      --accent2:#a78bfa;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --shadow2: 0 10px 30px rgba(0,0,0,.30);
+
+      --r-xl: 22px;
+      --r-lg: 18px;
+      --r-md: 14px;
+
+      --max: 1180px;
+      --content: 860px;
+      --sidebar: 300px;
+
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg0:#f5f7ff;
+        --bg1:#eef2ff;
+        --bg2:#e8ecff;
+        --card: rgba(17,24,39,.04);
+        --card2: rgba(17,24,39,.06);
+        --border: rgba(17,24,39,.10);
+        --text:#0b1020;
+        --muted: rgba(11,16,32,.65);
+        --shadow: 0 18px 60px rgba(11,16,32,.10);
+        --shadow2: 0 10px 30px rgba(11,16,32,.08);
+        --accent:#2563eb;
+        --accent2:#7c3aed;
+        --good:#059669;
+        --warn:#b45309;
+        --bad:#be123c;
+      }
+    }
+
+    *{ box-sizing:border-box; }
+    html{ scroll-behavior:smooth; }
+    body{
+      margin:0;
+      font-family: var(--font);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 60%),
+        radial-gradient(900px 700px at 90% 10%, color-mix(in oklab, var(--accent2) 18%, transparent), transparent 60%),
+        radial-gradient(900px 700px at 50% 110%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 65%),
+        linear-gradient(180deg, var(--bg0), var(--bg1) 40%, var(--bg2));
+      min-height:100vh;
+      line-height:1.75;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a{ color: color-mix(in oklab, var(--accent) 92%, white); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+    a:focus-visible{
+      outline:2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+      outline-offset:3px;
+      border-radius:10px;
+    }
+
+    /* Top progress bar */
+    .progress{
+      position:fixed;
+      top:0; left:0;
+      width:100%;
+      height:4px;
+      background: transparent;
+      z-index:1000;
+    }
+    .progress > i{
+      display:block;
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 40%, transparent);
+    }
+
+    /* App shell */
+    .shell{
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 18px 14px 70px;
+    }
+
+    /* Glass header */
+    .topbar{
+      position:sticky;
+      top: 10px;
+      z-index: 20;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      padding: 12px 12px;
+      border-radius: var(--r-xl);
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, color-mix(in oklab, var(--card2) 100%, transparent), color-mix(in oklab, var(--card) 100%, transparent));
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow2);
+    }
+    .brand{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      min-width: 0;
+    }
+    .dot{
+      width: 14px; height: 14px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent2));
+      box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 20%, transparent);
+      flex: 0 0 auto;
+    }
+    .title{
+      font-size: 14px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      letter-spacing: .2px;
+    }
+    .actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .iconbtn{
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      display:grid;
+      place-items:center;
+      box-shadow: 0 8px 22px rgba(0,0,0,.22);
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .iconbtn:hover{ transform: translateY(-1px); background: color-mix(in oklab, var(--card2) 120%, transparent); }
+    .iconbtn:active{ transform: translateY(0px); }
+    .iconbtn svg{ width: 18px; height:18px; opacity:.92; }
+
+    /* Layout grid */
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    @media (min-width: 980px){
+      .grid{ grid-template-columns: minmax(0, var(--content)) minmax(0, var(--sidebar)); align-items:start; }
+    }
+
+    /* Main card */
+    .paper{
+      border-radius: var(--r-xl);
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, color-mix(in oklab, var(--card2) 95%, transparent), color-mix(in oklab, var(--card) 100%, transparent));
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .paper-inner{
+      padding: 20px 16px 10px;
+    }
+    @media (min-width: 640px){
+      .paper-inner{ padding: 28px 26px 14px; }
+    }
+
+    /* Headings */
+    .Title{
+      margin:0 0 10px;
+      font-size: clamp(20px, 2.2vw, 28px);
+      line-height:1.15;
+      letter-spacing:.2px;
+      font-weight: 820;
+    }
+
+    h4{
+      margin: 20px 0 10px;
+      font-size: 15px;
+      font-weight: 820;
+      color: color-mix(in oklab, var(--text) 92%, transparent);
+      scroll-margin-top: 90px;
+    }
+
+    /* Existing text classes */
+    .Content, .Content2{
+      margin: 10px 0;
+      font-size: 15px;
+      color: color-mix(in oklab, var(--text) 92%, transparent);
+    }
+    .Content2{ color: color-mix(in oklab, var(--text) 84%, transparent); text-indent: 0; }
+    .Content ul{
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+    .Content li{ margin: 6px 0; }
+
+    /* "ForInformation" as info callout */
+    .ForInformation{
+      margin: 14px 0;
+      padding: 14px 14px;
+      border-radius: var(--r-lg);
+      border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
+      background: linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 14%, transparent),
+        color-mix(in oklab, var(--accent2) 10%, transparent));
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+      font-style: italic;
+    }
+
+    /* Automatic warning callout: any .Content containing strong "Внимание!" */
+    .Content:has(strong){
+      /* keep normal unless the first strong is "Внимание!" */
+    }
+    .Content:has(strong:first-child){
+      padding: 14px 14px;
+      border-radius: var(--r-lg);
+      border: 1px solid color-mix(in oklab, var(--bad) 26%, var(--border));
+      border-left: 5px solid color-mix(in oklab, var(--bad) 55%, transparent);
+      background: linear-gradient(180deg,
+        color-mix(in oklab, var(--bad) 12%, transparent),
+        color-mix(in oklab, var(--bad) 7%, transparent));
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    }
+    .Content:has(strong:first-child) strong:first-child{
+      color: color-mix(in oklab, var(--bad) 82%, white);
+    }
+
+    /* Figures */
+    .article{ counter-reset: fig; }
+    figure.figure{
+      counter-increment: fig;
+      margin: 14px 0 18px;
+      padding: 14px;
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+    }
+    figure.figure img{
+      width: 100%;
+      height:auto;
+      display:block;
+      border-radius: 16px;
+      border: 1px solid color-mix(in oklab, var(--border) 100%, transparent);
+      background: color-mix(in oklab, var(--card) 100%, transparent);
+      cursor: zoom-in;
+    }
+    figure.figure figcaption{
+      margin-top: 10px;
+      font-size: 12px;
+      line-height:1.35;
+      color: var(--muted);
+      font-style: italic;
+      text-align:center;
+    }
+    figure.figure figcaption::before{
+      content: "Рисунок " counter(fig) " - ";
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      font-style: normal;
+    }
+
+    /* Figure2 style for multiple images in one figure */
+    figure.figure2{
+      counter-increment: fig;
+      margin: 14px 0 18px;
+      padding: 14px;
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    figure.figure2 img{
+      max-width: 100%;
+      height: auto;
+      display: inline-block;
+      border-radius: 16px;
+      border: 1px solid color-mix(in oklab, var(--border) 100%, transparent);
+      background: color-mix(in oklab, var(--card) 100%, transparent);
+      cursor: zoom-in;
+    }
+    figure.figure2 figcaption{
+      width: 100%;
+      margin-top: 10px;
+      font-size: 12px;
+      line-height:1.35;
+      color: var(--muted);
+      font-style: italic;
+      text-align:center;
+    }
+    figure.figure2 figcaption::before{
+      content: "Рисунок " counter(fig) " - ";
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      font-style: normal;
+    }
+
+    /* Sidebar TOC */
+    .side{
+      position: relative;
+    }
+    .panel{
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+    }
+    .panel .head{
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .panel .head .h{
+      font-size: 13px;
+      letter-spacing: .25px;
+      color: var(--muted);
+      font-weight: 750;
+    }
+    .panel .body{
+      padding: 10px 10px 12px;
+      max-height: calc(100vh - 160px);
+      overflow:auto;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in oklab, var(--accent) 45%, transparent) transparent;
+    }
+    .panel .body::-webkit-scrollbar{ width: 10px; }
+    .panel .body::-webkit-scrollbar-thumb{
+      background: color-mix(in oklab, var(--accent) 30%, transparent);
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+
+    .toclist{ list-style:none; margin:0; padding:0; }
+    .toclist a{
+      display:block;
+      padding: 9px 10px;
+      border-radius: 12px;
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      border: 1px solid transparent;
+      text-decoration:none;
+      transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    }
+    .toclist a:hover{
+      background: color-mix(in oklab, var(--card2) 110%, transparent);
+      border-color: color-mix(in oklab, var(--border) 120%, transparent);
+      transform: translateY(-1px);
+    }
+    .toclist a[data-level="4"]{
+      padding-left: 22px;
+      color: color-mix(in oklab, var(--text) 72%, transparent);
+      font-size: 13px;
+    }
+    .toclist a.is-active{
+      background: linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 18%, transparent),
+        color-mix(in oklab, var(--accent2) 12%, transparent));
+      border-color: color-mix(in oklab, var(--accent) 22%, var(--border));
+      color: var(--text);
+    }
+
+    /* Mobile TOC (accordion) */
+    .mobiletoc{
+      display:block;
+      margin-top: 14px;
+    }
+    @media (min-width: 980px){
+      .mobiletoc{ display:none; }
+    }
+    .mobiletoc details{
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+    }
+    .mobiletoc summary{
+      list-style:none;
+      cursor:pointer;
+      padding: 14px 14px;
+      color: var(--muted);
+      font-weight: 750;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .mobiletoc summary::-webkit-details-marker{ display:none; }
+    .mobiletoc summary .chev{ opacity:.8; transition: transform .15s ease; }
+    .mobiletoc details[open] summary .chev{ transform: rotate(180deg); }
+    .mobiletoc .body{ padding: 8px 10px 12px; }
+
+    /* Hide old TOC block from the original HTML */
+    nav.toc-old{ display:none !important; }
+
+    /* Floating "to top" */
+    .totop{
+      position: fixed;
+      right: 14px;
+      bottom: 80px;
+      z-index: 30;
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .totop.show{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .totop svg{ width: 18px; height: 18px; opacity:.92; }
+
+    /* Lightbox */
+    .lb{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.72);
+      display:none;
+      place-items:center;
+      padding: 18px;
+      z-index: 2000;
+    }
+    .lb.show{ display:grid; }
+    .lb .wrap{
+      max-width: min(1100px, 96vw);
+      max-height: 90vh;
+      display:grid;
+      gap: 10px;
+      align-items:center;
+      justify-items:center;
+    }
+    .lb img{
+      max-width: 100%;
+      max-height: 84vh;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 30px 80px rgba(0,0,0,.55);
+      background: rgba(255,255,255,.03);
+      cursor: zoom-out;
+    }
+    .lb .cap{
+      color: rgba(255,255,255,.78);
+      font-size: 12px;
+      text-align:center;
+    }
+
+    /* Reduce motion */
+    @media (prefers-reduced-motion: reduce){
+      html{ scroll-behavior:auto; }
+      .iconbtn, .toclist a, .totop, .mobiletoc summary .chev { transition:none !important; }
+    }
+    .download-btn{
+      display:block;
+      width:fit-content;
+      margin:0px auto 20px;
+      background:#1e73e8;
+      color:#fff !important;
+      padding:14px 36px;
+      border-radius:18px;
+      font-size:18px;
+      font-weight:600;
+      text-decoration:none !important;
+      box-shadow:0 6px 18px rgba(30,115,232,.35);
+      transition:transform .15s ease, box-shadow .15s ease;
+      text-align:center;
+    }
+
+    .download-btn:hover{
+      transform:translateY(-2px);
+      box-shadow:0 10px 22px rgba(30,115,232,.45);
+    }
+
+    @media (max-width: 979px){
+      /* скрываем нижнее (sidebar) оглавление, оставляем верхнее mobiletoc */
+      .side{ display:none; }
+    }
+  
+    h3{margin:34px 0 10px;font-size:clamp(19px,2vw,23px);line-height:1.25;scroll-margin-top:90px;padding-top:14px;border-top:1px solid var(--border)}
+    h4{font-size:16px}
+    .hero{padding-bottom:6px}
+    .kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+    .hero .Title{margin-top:6px;text-wrap:balance}
+    .download-btn.ghost{background:transparent;color:var(--accent)!important;border:1.5px solid var(--accent);box-shadow:none}
+    .btnrow{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 6px}
+    .btnrow .download-btn{margin:0;font-size:16px;padding:12px 24px}
+    ol.steps{margin:10px 0 14px;padding-left:24px;font-size:15px}
+    ol.steps li{margin:6px 0;padding-left:4px}
+    ol.steps li::marker{font-weight:800;color:var(--accent)}
+    ol.steps.um li::marker{color:var(--accent)} ol.steps.emp li::marker{color:var(--good)}
+    .cols{display:grid;grid-template-columns:1fr;gap:14px;margin:10px 0}
+    @media(min-width:700px){.cols{grid-template-columns:1fr 1fr}}
+    .col{min-width:0;border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;background:color-mix(in oklab,var(--card2) 100%,transparent)}
+    .tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:999px;background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent)}
+    .table-wrap{overflow-x:auto;margin:12px 0 16px;border:1px solid var(--border);border-radius:var(--r-lg)}
+    table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5}
+    th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--border)}
+    th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:color-mix(in oklab,var(--card2) 140%,transparent)}
+    tr:last-child td{border-bottom:0}
+    .mono{font-family:var(--mono);font-size:.92em;padding:1px 6px;border-radius:6px;background:var(--card2);border:1px solid var(--border);white-space:nowrap}
+    .who{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;white-space:nowrap}
+    .who.um{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent)}
+    .who.emp{background:color-mix(in oklab,var(--good) 18%,transparent);color:var(--good)}
+    .flow{display:grid;grid-template-columns:1fr;gap:8px;margin:12px 0 16px}
+    @media(min-width:760px){.flow{grid-template-columns:repeat(5,1fr)}}
+    .fstep{border-radius:14px;padding:10px 12px;border:1px solid var(--border);display:flex;flex-direction:column;gap:4px;font-size:13.5px;line-height:1.4;min-width:0}
+    .fstep b{font-size:13px}
+    .fstep.um{border-left:4px solid var(--accent);background:color-mix(in oklab,var(--accent) 8%,transparent)}
+    .fstep.emp{border-left:4px solid var(--good);background:color-mix(in oklab,var(--good) 8%,transparent)}
+    .sample{margin:12px 0;padding:12px 14px;border-radius:var(--r-lg);border:1px dashed var(--border);font-size:14px;line-height:1.6}
+    .sample .tag{margin-bottom:6px}
+    ul.links{padding-left:20px;font-size:15px} ul.links li{margin:6px 0}
+    figure.figure img.narrow{width:auto;max-width:min(100%,560px);margin:0 auto}
+    figure.figure2 img{max-width:calc(50% - 6px);width:auto;max-height:440px;object-fit:contain}
+    figure.phone img{max-height:560px;max-width:calc(50% - 6px);width:auto;margin:0 auto}
+    figure.figure.phone img{max-width:300px}
+    .col figure.figure{margin:10px 0 0;padding:8px}
+    .stop{margin:14px 0;padding:14px 16px;border-radius:var(--r-lg);border:2px solid #dc2626;background:color-mix(in oklab,#dc2626 12%,transparent);color:var(--text);font-size:15px;line-height:1.55;break-inside:avoid}
+    .stop b{color:#dc2626;font-size:16px;letter-spacing:.02em}
+    .stop u{text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px}
+    .redu{color:#dc2626;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+    .printtoc{display:none}
+    @media (max-width:640px){
+      .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:auto}
+      .table-wrap thead{display:none}
+      .table-wrap tr{padding:8px 0;border-bottom:1px solid var(--border)}
+      .table-wrap tr:last-child{border-bottom:0}
+      .table-wrap td{border:0;padding:3px 12px}
+      .table-wrap td:first-child{font-weight:700}
+      figure.figure2 img{max-width:100%;max-height:none}
+    }
+    @media print{
+      @page{size:A4;margin:12mm 12mm 14mm}
+      :root{--bg0:#fff;--bg1:#fff;--bg2:#fff;--card:#f6f7fb;--card2:#f1f3f9;--border:#d8dce8;--text:#111;--muted:#555;--accent:#1d4ed8;--accent2:#6d28d9;--bad:#be123c;--shadow:none;--shadow2:none;--good:#047857}
+      body{background:#fff!important;font-size:11.5px;line-height:1.42}
+      .Content,.Content2,ol.steps{font-size:11.5px;margin:5px 0}
+      ol.steps li{margin:3px 0;break-inside:avoid}
+      ol.steps{break-inside:avoid}
+      h4 + ol.steps, h4 + .Content2{break-before:avoid}
+      .Content:has(strong:first-child),.ForInformation{padding:8px 10px;margin:8px 0}
+      table{font-size:11px} th,td{padding:5px 8px}
+      thead{display:table-header-group} tr{break-inside:avoid}
+      figure.figure,figure.figure2{margin:6px 0 8px;padding:6px;break-inside:avoid}
+      figure figcaption{margin-top:4px}
+      .progress,.topbar,.mobiletoc,.side,.totop,.lb,.btnrow{display:none!important}
+      .shell{padding:0;max-width:none}.grid{display:block;margin:0}
+      .paper{border:0;box-shadow:none;background:#fff;overflow:visible}.paper-inner{padding:0 3px}
+      .printtoc{display:block;margin:8px 0 14px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:10.5px;line-height:1.3;columns:2;column-gap:18px}
+      .printtoc a{color:#1d4ed8;text-decoration:none}
+      .printtoc ol{margin:2px 0;padding-left:0;list-style:none}.printtoc ol ol{padding-left:14px}.printtoc li{margin:1px 0;break-inside:avoid}
+      .keep{break-inside:avoid}
+      .keep.sec{margin-top:5mm}
+      .table-wrap{overflow:visible!important;display:block}
+      .flow,.col,.sample,.Content,.Content2,.ForInformation{break-inside:avoid}
+      .flow{grid-template-columns:repeat(5,1fr)!important}
+      .cols{grid-template-columns:1fr 1fr!important}
+      h3{border-top:0;margin:0 0 6px;padding-top:0;font-size:17px;break-after:avoid}
+      h4{margin:12px 0 5px;font-size:13px;break-after:avoid}
+      .Content2:has(+ ol),.Content2:has(+ figure),.Content2:has(+ .table-wrap){break-after:avoid}
+      figure.figure img{max-height:85mm;width:auto;max-width:100%;margin:0 auto}
+      figure.figure img.tall{max-height:150mm}
+      figure.figure2 img{max-height:70mm;max-width:calc(50% - 6px)}
+      figure.phone img{max-height:95mm!important;max-width:calc(33% - 8px)!important}
+      figure.figure.phone img{max-width:60mm!important}
+      .ForInformation,.Content:has(strong:first-child){box-shadow:none}
+      a{color:#1d4ed8}
+    }
+</style>
+<style id="mode-overrides"></style>
+</head><body>
+  <div class="progress" aria-hidden="true"><i id="progressbar"></i></div>
+  <div class="shell article" id="top">
+    <div class="topbar">
+      <div class="brand"><div class="dot" aria-hidden="true"></div><div class="title">ИС «ЛМК-Контроль» · телефон</div></div>
+      <div class="actions">
+        <button class="iconbtn" type="button" id="toggleTheme" aria-label="Переключить тему"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="2"></path><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M5 19l1.5-1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button>
+        <a class="iconbtn" href="lmk-mobile.pdf" target="_blank" aria-label="Скачать PDF" title="Скачать PDF" style="color:inherit;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></a>
+        <button class="iconbtn" type="button" id="copyLink" aria-label="Скопировать ссылку на страницу"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button>
+      </div>
+    </div>
+    <div class="mobiletoc" id="mobileToc"></div>
+    <div class="grid">
+      <main class="paper"><div class="paper-inner">
+ <div class="hero">
+<h1 class="Title">ИС «ЛМК-Контроль» с телефона</h1>
+<div class="Content2">Учёт медосмотров, санминимума (гигиенического обучения), прививок и электронных медкнижек сотрудников магазина. Собрано из инструкций системы, обучающих роликов, регламента по ЭЛМК, писем службы охраны труда и проверено в действующей системе. Красной рамкой на картинках выделено то, что нужно нажать или заполнить.</div>
+<div class="btnrow">
+<a class="download-btn" href="https://ref.hbis.ru" target="_blank">Открыть ref.hbis.ru</a>
+<a class="download-btn ghost" href="lmk.html">Версия для компьютера</a>
+</div>
+</div>
+<nav class="printtoc"><b>Содержание</b><ol><li><a href="#smob">Как работать с телефона</a></li><li><a href="#s1">1. Первый шаг — карточка сотрудника</a><ol><li><a href="#s1-1">Где создать карточку</a></li><li><a href="#s1-2">Как заполнить карточку</a></li><li><a href="#s1-3">Для нового магазина</a></li><li><a href="#s1-4">Работа с системой по кругу</a></li></ol></li><li><a href="#s2">2. Первый вход и настройка телефона</a><ol><li><a href="#s2-1">Письмо с логином и паролем</a></li><li><a href="#s2-2">Ярлык на экран «Домой»</a></li><li><a href="#s2-3">Вход по Face ID / отпечатку</a></li><li><a href="#s2-4">Уведомления (PUSH)</a></li></ol></li><li><a href="#s3">3. Главный экран и меню</a><ol><li><a href="#s3-1">Пункты меню</a></li></ol></li><li><a href="#s4">4. Карточка сотрудника: документы и статусы</a><ol><li><a href="#s4-1">Кнопка «Проверить ЛМК»</a></li><li><a href="#s4-2">Увольнение, декрет, возврат</a></li><li><a href="#s4-3">Ввод адреса по справочнику</a></li></ol></li><li><a href="#s5">5. Перевод сотрудника между магазинами</a><ol><li><a href="#s5-1">Отправить своего сотрудника в другой магазин</a></li><li><a href="#s5-2">Забрать сотрудника из другого магазина к себе</a></li></ol></li><li><a href="#s6">6. Направления: медосмотр и санминимум</a><ol><li><a href="#s6-2">Медосмотр</a></li><li><a href="#s6-3">Санминимум (гигобучение) с ЭЛМК</a></li><li><a href="#s6-4">ОПО — психиатрическое освидетельствование</a></li><li><a href="#s6-6">Электронное направление с подписью сотрудника — <span class="redu">ТОЛЬКО ТОМСК</span></a></li><li><a href="#s6-5">Печать и PDF</a></li></ol></li><li><a href="#s7">7. Результаты: даты, комментарии, СЭМД</a><ol><li><a href="#s7-1">Следите за «Комментарием» направления</a></li><li><a href="#s7-2">СЭМД — держите на контроле</a></li><li><a href="#s7-3">«Проверить ЛМК» — когда даты не пришли</a></li><li><a href="#s7-4">Вручную по бумажной книжке</a></li></ol></li><li><a href="#svac">8. Прививки (документ «Мед.данные»)</a><ol><li><a href="#svac-1">Какие прививки нужны работникам торговли</a></li><li><a href="#svac-2">Как внести прививки</a></li></ol></li><li><a href="#s8">9. Электронная медкнижка (ЭЛМК)</a><ol><li><a href="#s8-2">9.1. Шаги управляющего</a></li><li><a href="#s8-3">9.2. Шаги сотрудника: Госуслуги</a></li><li><a href="#s8-4">9.3. Шаги сотрудника: Гигтест</a></li><li><a href="#s8-5">9.4. Особые случаи</a></li><li><a href="#s8-6">9.5. Замечания ФБУЗ и как их исправить</a></li></ol></li><li><a href="#s9">10. Отчёты</a></li><li><a href="#s10">11. Запрос журналов по охране труда</a></li><li><a href="#sppz">12. Протоколы проверки знаний ОТ (ППЗ)</a></li><li><a href="#smail">13. Письма от системы на почту</a></li><li><a href="#ssrv">14. Раздел «Сервис»</a></li><li><a href="#s11">15. Техподдержка и вопросы</a></li><li><a href="#s12">16. Обучающие ролики</a></li></ol></nav>
+<div class="keep sec"><h3 id="smob">Как работать с телефона</h3><div class="Content2">Система одна и та же, на телефоне меняется только расположение. Всё, что ниже, делается с телефона.</div></div>
+
+<ol class="steps">
+<li><b>Ярлык.</b> Добавьте ref.hbis.ru на экран «Домой» (<a href="#s2-2">раздел 2</a>) — открывается как приложение, работают вход по Face ID и уведомления.</li>
+<li><b>Меню — кнопка ☰</b> в левом верхнем углу. Пункты идут длинным списком: Справочники, Документы, Отчёты, Сервис. Список прокручивается пальцем, закрыть — ☰ ещё раз.</li>
+<li><b>Таблицы и формы шире экрана</b> — листайте пальцем <b>вбок</b>. Например, кнопка «Подписать» в направлении стоит правее остальных.</li>
+<li><b>Карточка сотрудника</b> длинная. В самом низу, под кнопками, — список документов с «+» (Медосмотр, Санминимум, Перевод, Мед.данные…). На компьютере этот список справа.</li>
+<li><b>Мелко?</b> Разведите двумя пальцами — страница увеличится. Поля с «…» открывают выбор из списка.</li>
+<li><b>Печать с телефона:</b> в окне печати нажмите «PDF» — файл можно переслать или распечатать позже.</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M00_main.jpg"/><img alt="" class="frame" src="images/M01_menu1.jpg"/><figcaption>главный экран: кнопка меню ☰ (слева) и открытое меню (справа)</figcaption></figure>
+<div class="keep sec"><h3 id="s1">1. Первый шаг — карточка сотрудника</h3><div class="Content"><strong>Внимание!</strong> «Мобильные кадры» проверяют в ИС «ЛМК-Контроль» даты допуска по <b>медосмотру</b> и <b>санминимуму</b>. Без карточки сотрудника в ЛМК нельзя ни выдать направления, ни получить допуск, а без допуска не получится трудоустроить в МК.</div></div>
+
+<div class="keep"><h4 id="s1-1">Где создать карточку</h4></div>
+<ol class="steps">
+<li>☰ → <b>«Справочники» → «Сотрудники»</b>.</li>
+<li>Сначала найдите сотрудника поиском по фамилии в столбце «Фамилия» → «Фильтр»: может быть, он уже заведён (например, раньше работал у нас).</li>
+<li>Нет в списке — нажмите <b>«Создать»</b>.</li>
+</ol>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M03_staff.jpg"/><figcaption>справочник «Сотрудники»: кнопка «Создать» (фамилии скрыты)</figcaption></figure>
+<div class="keep"><h4 id="s1-2">Как заполнить карточку</h4><div class="Content2">Красной рамкой — <b>обязательные</b> поля: без них карточка не сохранится.</div></div>
+
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M04_card_new1.jpg"/><img alt="" class="frame" src="images/M05_card_new2.jpg"/><figcaption>новая карточка: обязательные поля в рамке, внизу «Сохранить»</figcaption></figure>
+<div class="table-wrap"><table><thead><tr><th>Поле</th><th>Обязательно</th><th>Как заполнять</th></tr></thead><tbody>
+<tr><td>Фамилия, Имя</td><td>да</td><td>Как в паспорте. Система подсказывает варианты — можно выбрать из списка.</td></tr>
+<tr><td>Отчество</td><td>нет</td><td>Если есть — заполнить обязательно, иначе ФИО не совпадёт с Госуслугами и ЭЛМК.</td></tr>
+<tr><td>Дата рождения</td><td>да</td><td>ДД.ММ.ГГГГ, можно цифрами подряд: 01011990.</td></tr>
+<tr><td>Адрес прописки</td><td>да</td><td>Как в паспорте.</td></tr>
+<tr><td>Фактический адрес</td><td>нет</td><td>Через подсказки справочника адресов (<a href="#s4-3">ниже</a>).</td></tr>
+<tr><td>Пол</td><td>да</td><td>Из списка.</td></tr>
+<tr><td>Телефон</td><td>да</td><td>Мобильный сотрудника — на него приходят СМС (подпись направлений в Томске).</td></tr>
+<tr><td>Вид занятости</td><td>да</td><td>«Полная» или «Совместительство».</td></tr>
+<tr><td>СНИЛС</td><td>да</td><td>11 цифр. Нужен для ЭЛМК и передачи данных из медцентра.</td></tr>
+<tr><td>Образование</td><td>да</td><td>Из списка.</td></tr>
+<tr><td>Номер ЛМК</td><td>нет</td><td>Номер бумажной книжки, только если она есть и замена не нужна. Нет книжки или нужна новая — пусто.</td></tr>
+<tr><td>Номер / статус ЭЛМК, статус ЛМК</td><td>—</td><td>Заполняются системой сами.</td></tr>
+<tr><td>Подразделение</td><td>да</td><td>Подставится ваше. Другое — через «…».</td></tr>
+<tr><td>Статус</td><td>да</td><td>Ставим <b>«Трудоустройство»</b> (система подставляет сама — не меняйте).</td></tr>
+<tr><td>Должность</td><td>да</td><td>Через «…» из справочника должностей.</td></tr>
+<tr><td>Дата приёма, Табельный номер</td><td>нет</td><td>По данным МК, когда сотрудник принят.</td></tr>
+<tr><td>Медосмотр, Санминимум, ОПО</td><td>—</td><td>В новой карточке недоступны: даты придут из направлений или через «Проверить ЛМК».</td></tr>
+</tbody></table></div>
+<div class="Content2">Нажмите <b>«Сохранить»</b> — появится «Данные сохранены». Дальше — прививки (<a href="#svac">раздел 8</a>) и направления (<a href="#s6">раздел 6</a>).</div>
+<div class="Content"><strong>«Сохранение невозможно!»</strong> — значит, сотрудник уже числится в другом магазине. В этом же окне нажмите «Запрос на перевод» (<a href="#s5-2">раздел 5</a>).</div>
+<div class="keep"><h4 id="s1-3">Для нового магазина</h4></div>
+<ol class="steps">
+<li><b>Пока у управляющего нового магазина нет доступа в ЛМК</b>, карточку создают и направления выдают <b>на действующем магазине</b> (руководитель команды открытия или управляющий действующего магазина).</li>
+<li>Сотрудники проходят медосмотр и санминимум <b>до приёмки</b> магазина и приходят на открытие уже с допусками — только трудоустроиться.</li>
+<li>В первый день открытия на почту нового магазина приходит письмо с логином и паролем (<a href="#s2">раздел 2</a>).</li>
+<li>В новом магазине запрашиваем <b>перевод</b> сотрудников из действующего (<a href="#s5">раздел 5</a>). МК допустят к трудоустройству и без перевода — главное, чтобы были даты допусков; перевод нужен, чтобы сотрудник числился и контролировался в вашем магазине.</li>
+<li>Заказываем журналы по охране труда (<a href="#s10">раздел 11</a>).</li>
+</ol>
+<div class="Content"><strong>Повторное трудоустройство.</strong> Если сотрудник уволился и снова устраивается к нам (даже на ту же должность через пару месяцев), <b>предварительный медосмотр проходится заново</b>. Основание: ТК РФ ст. 220 и 215 (письмо службы охраны труда от 06.08.2026).</div>
+<div class="keep"><h4 id="s1-4">Работа с системой по кругу</h4></div>
+<ol class="steps">
+<li><b>Сотрудники</b> — все ли есть, уволенным статус «Уволенный».</li>
+<li><b>Прививки и даты</b> — внесены ли «Мед.данные», есть ли сроки медосмотра и санминимума.</li>
+<li><b>Мониторинг</b> — за 30 дней до окончания срока придёт письмо; то же в виджетах и отчётах.</li>
+<li><b>Направление</b> на медосмотр или санминимум.</li>
+<li><b>Результат</b> — следим за «Комментарием» направления, даты подтянутся сами; если нет — «Проверить ЛМК» или вручную.</li>
+</ol>
+<!-- ===================== 2 ===================== -->
+<div class="keep sec"><h3 id="s2">2. Первый вход и настройка телефона</h3><div class="keep"><h4 id="s2-1">Письмо с логином и паролем</h4><div class="Content2">В день назначения на почту магазина приходит письмо от hbis.one с темой <b>«ОТИСα. Добро пожаловать в нашу семью»</b> (с пометкой «Письмо от внешнего отправителя» — это нормально). В нём логин (обычно код магазина маленькими буквами, например <span class="mono">pr01</span>), пароль, должность и подразделение.</div></div></div>
+
+
+<ol class="steps">
+<li>Откройте <a href="https://ref.hbis.ru" target="_blank">ref.hbis.ru</a> (именно <b>.ru</b>).</li>
+<li>Введите логин и пароль из письма → «Войти».</li>
+</ol>
+<figure class="figure"><img alt="" class="frame narrow" src="images/login.png"/><figcaption>окно входа</figcaption></figure>
+<div class="Content"><strong>Не сохраняйте пароль в браузере.</strong> Разработчик системы не рекомендует это из-за краж сохранённых паролей. Для быстрого входа настройте вход по Face ID / отпечатку.</div>
+<div class="keep"><h4 id="s2-2">Ярлык на экран «Домой»</h4><div class="Content2">Входить в учётную запись не обязательно — всё делается на странице входа. iPhone — <b>Safari</b>, Android — <b>Google Chrome</b>.</div></div>
+
+<div class="cols">
+<div class="col"><div class="tag">iPhone</div>
+<ol class="steps">
+<li>Откройте ref.hbis.ru в Safari.</li>
+<li><b>«Поделиться»</b> (квадрат со стрелкой; в новых версиях сначала «•••»).</li>
+<li><b>«На экран „Домой“»</b> → <b>«Добавить»</b>.</li>
+</ol></div>
+<div class="col"><div class="tag">Android</div>
+<ol class="steps">
+<li>Откройте ref.hbis.ru в Chrome.</li>
+<li><b>«⋮»</b> справа вверху.</li>
+<li><b>«Добавить на главный экран»</b> → <b>«Добавить»</b>.</li>
+</ol></div>
+</div>
+<div class="keep"><h4 id="s2-3">Вход по Face ID / отпечатку</h4></div>
+<ol class="steps">
+<li>Войдите логином и паролем.</li>
+<li>☰ → <b>«Сервис» → «Регистрация ключа авторизации»</b>.</li>
+<li>Подтвердите Face ID / отпечаток по подсказкам телефона.</li>
+</ol>
+<div class="ForInformation">Для информации: при запуске ярлыком система сама предложит войти по ключу. В браузере — значок замка в окне входа.</div>
+<div class="keep"><h4 id="s2-4">Уведомления (PUSH)</h4><div class="Content2">Система присылает уведомления о смене статусов документов: переводы, направления, сроки. На телефоне — только с ярлыка.</div></div>
+
+<ol class="steps">
+<li>☰ → <b>«Сервис» → «Сообщения»</b>, примите соглашение (если ещё не принимали).</li>
+<li>Нажмите <b>колокольчик</b> в левом верхнем углу окна → разрешите уведомления.</li>
+</ol>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M22_bell.jpg"/><figcaption>окно «Быстрые сообщения»: колокольчик подписки в левом верхнем углу</figcaption></figure>
+<div class="Content2">Колокольчик станет зелёным. Делается на каждом устройстве отдельно; повторное нажатие — отписка.</div>
+<!-- ===================== 3 ===================== -->
+<div class="keep sec"><h3 id="s3">3. Главный экран и меню</h3><figure class="figure phone"><img alt="" class="frame narrow" src="images/M00_main.jpg"/><figcaption>главный экран: правила техподдержки и виджеты (фамилии скрыты)</figcaption></figure></div>
+
+<div class="table-wrap"><table><thead><tr><th>Виджет</th><th>Что показывает</th></tr></thead><tbody>
+<tr><td><b>Мои задачи</b></td><td>«Создать направления» — кому пора выдать направление. «Проставить даты» — по каким направлениям не внесены результаты.</td></tr>
+<tr><td><b>Замечания ФБУЗ</b></td><td>Ход оформления ЭЛМК и замечания ФБУЗ по каждому направлению (<a href="#s8-6">как исправить</a>).</td></tr>
+<tr><td><b>К отстранению</b></td><td>Сотрудники без действующих допусков.</td></tr>
+<tr><td><b>Всего</b></td><td>Штат (зелёный), «Истекает срок действия» в ближайшие 30 дней (голубой), «Просрочено» (оранжевый) — по медосмотру, санминимуму и ОПО. Нажмите на цифру — откроется список.</td></tr>
+</tbody></table></div>
+<div class="Content"><strong>Внимание!</strong> Направления на медосмотр, созданные из окна виджета, всегда «Периодические». Новому сотруднику нужен «Предварительный» — создавайте из карточки.</div>
+<div class="keep"><h4 id="s3-1">Пункты меню</h4></div>
+<div class="table-wrap"><table><thead><tr><th>Меню</th><th>Что внутри</th></tr></thead><tbody>
+<tr><td><b>Справочники</b></td><td>«Сотрудники» — ваши сотрудники; «Подразделения», «Должности» — для выбора.</td></tr>
+<tr><td><b>Документы</b></td><td>«Кадры» → Перевод; «Направления» → Медосмотры, Санминимум, ОПО (списки для просмотра и печати); «Образование» → ППЗ; «Охрана труда» → Запрос журналов; «Мед.данные».</td></tr>
+<tr><td><b>Отчёты</b></td><td>«Риски медосмотры», «Направления на медосмотр», «Риски санминимум», «Направления на санминимум», «Просроченные», «Карточка подразделения».</td></tr>
+<tr><td><b>Сервис</b></td><td>Справка, Сообщения, Заметки, Корзина, Почта, Получить ЭП, Доступ по QR, Регистрация ключа авторизации (<a href="#ssrv">раздел 14</a>).</td></tr>
+</tbody></table></div>
+<!-- ===================== 4 ===================== -->
+<div class="keep sec"><h3 id="s4">4. Карточка сотрудника: документы и статусы</h3><div class="Content2">Откройте сотрудника из справочника. Вверху — сроки действия допусков, <b>в самом низу</b> — список связанных документов с кнопками «+». Через «+» создаются направления, перевод и «Мед.данные».</div></div>
+
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M23_card_top.jpg"/><img alt="" class="frame" src="images/M06_card_panel.jpg"/><figcaption>карточка (личные данные скрыты) и список документов с «+»</figcaption></figure>
+<div class="keep"><h4 id="s4-1">Кнопка «Проверить ЛМК»</h4><div class="Content2">Внизу карточки. Открывает меню: «Проверка», «Сканировать QR», <b>«Проверка ЭЛМК»</b> (подтянуть данные из ЭЛМК), <b>«Проверить подачу заявления»</b> (подал ли сотрудник заявление и в какой ФБУЗ).</div></div>
+
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M07_checklmk.jpg"/><figcaption>меню «Проверить ЛМК»</figcaption></figure>
+<div class="keep"><h4 id="s4-2">Увольнение, декрет, возврат</h4></div>
+<ol class="steps">
+<li>Откройте карточку → «Статус»: <b>«Уволенный»</b> (уволился или ушёл в другой магазин), <b>«Декрет»</b>, «Больничный», «Отстранен» и др. → «Сохранить».</li>
+<li>Сотрудник уйдёт из штата, виджетов и писем, карточка останется. Вернулся — верните «Работающий», заново не заводите. Удалять сотрудников не нужно.</li>
+</ol>
+<div class="keep"><h4 id="s4-3">Ввод адреса по справочнику</h4></div>
+<ol class="steps">
+<li>Начните вводить регион (например, «Томская обл») → выберите строку из подсказки.</li>
+<li>Через запятую: город, улица, дом — каждый раз выбирайте строку из подсказки.</li>
+</ol>
+<!-- ===================== 5 ===================== -->
+<div class="keep sec"><h3 id="s5">5. Перевод сотрудника между магазинами</h3><div class="Content2">Чужие сотрудники в вашем справочнике не видны. После согласования сотрудник появится у вас <b>со всеми документами и сроками</b>. Статусы: «На согласовании» → «Согласовано» или «Отказано».</div></div>
+
+<div class="keep"><h4 id="s5-1">Отправить своего сотрудника в другой магазин</h4></div>
+<ol class="steps">
+<li>Карточка сотрудника → «+» напротив <b>«Перевод»</b>.</li>
+<li>«Прибытия» → «…» → найдите магазин по коду → отметьте → «Выбрать».</li>
+<li>Нажмите <b>«В работу»</b>. Пока не нажата — второй магазин перевод не видит.</li>
+</ol>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M16_transfer.jpg"/><figcaption>перевод: «Прибытия» и «В работу»</figcaption></figure>
+<div class="keep"><h4 id="s5-2">Забрать сотрудника из другого магазина к себе</h4></div>
+<ol class="steps">
+<li>Справочник «Сотрудники» → «Создать» → ФИО, дата рождения и остальные обязательные поля → «Сохранить».</li>
+<li>Появится <b>«Сохранение невозможно!»</b> — «Указанный сотрудник числится в подразделении …» → нажмите <b>«Запрос на перевод»</b>.</li>
+<li>«Документ создан!» — ждите: управляющий прежнего магазина согласует, вам придёт письмо. Долго нет ответа — позвоните ему.</li>
+</ol>
+<figure class="figure2"><img alt="" class="frame" src="images/transfer_err.jpg"/><img alt="" class="frame" src="images/transfer_ok.png"/><figcaption>«Запрос на перевод» и подтверждение</figcaption></figure>
+<!-- ===================== 6 ===================== -->
+<div class="keep sec"><h3 id="s6">6. Направления: медосмотр и санминимум</h3><div class="Content2">Направления создаются <b>из карточки сотрудника</b> (кнопка «+») или из виджета на главном экране (только периодические). В «Документы → Направления» — только списки с «Фильтром», кнопки «Создать» там нет. Даты «Дата прохождения / Действует по» при выдаче не заполняются.</div></div>
+
+<div class="Content"><strong>Приоритет — электронная медкнижка (ЭЛМК).</strong> Всех сотрудников оформляем и переводим на ЭЛМК: в направлении на медосмотр <b>«Тип ЛМК» = «ЭЛМК»</b>, в направлении на санминимум (гигтест) <b>«Услуги» = «ЭЛМК»</b>. Бумажные варианты — только если ЭЛМК оформить невозможно.</div>
+<div class="Content2">Порядок: <b>сначала медосмотр</b> (рекомендуется), <b>потом гигиеническое обучение</b>. На медосмотр сотрудник берёт <b>паспорт, направление и прививочный сертификат</b>.</div>
+<div class="keep"><h4 id="s6-2">Медосмотр</h4></div>
+<ol class="steps">
+<li>Карточка → «+» напротив <b>«Медосмотр»</b>.</li>
+<li><b>Вид осмотра:</b> «Предварительный» — при приёме (в том числе повторном); «Периодический» — работающим.</li>
+<li><b>Тип ЛМК: «ЭЛМК»</b> (в приоритете; «Бумажная» — только в исключительных случаях).</li>
+<li><b>Мед. центр:</b> нажмите «…» и выберите <b>свой медцентр, который проводит медосмотры в вашем городе</b> → «Выбрать». По умолчанию стоит томский.</li>
+<li>«Сохранить» → «Печать». Распечатайте, подпишите, выдайте сотруднику.</li>
+</ol>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M08_medos_new.jpg"/><figcaption>направление на медосмотр: вид осмотра, тип ЛМК, мед. центр</figcaption></figure>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M09_clinics.jpg"/><figcaption>выбор медцентра: отметьте свой и нажмите «Выбрать» (список длинный — листайте)</figcaption></figure>
+<div class="ForInformation">Для информации: в списке медцентров много организаций по всем регионам (листайте вниз или ищите по полю «Адрес»). Выберите <b>свой медцентр, который проводит медосмотры в вашем городе</b>. Не знаете какой — уточните у службы охраны труда. Бумажное направление действительно 14 календарных дней.</div>
+<div class="keep"><h4 id="s6-3">Санминимум (гигобучение) с ЭЛМК</h4></div>
+<ol class="steps">
+<li>Карточка → «+» напротив <b>«Санминимум»</b>.</li>
+<li><b>Услуги: «ЭЛМК»</b> — всегда в приоритете (бумажные варианты — только в исключительных случаях).</li>
+<li><b>ФБУЗ:</b> «…» → <b>ФБУЗ «Центр гигиены и эпидемиологии в Томской области»</b> → «Выбрать» (обычно уже стоит).</li>
+<li>«Сохранить», откройте снова → <b>«Подписать» → «ЭП пользователя»</b> (<a href="#s8-2">подробно в 9.1</a>).</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M10_sanmin_new.jpg"/><img alt="" class="frame" src="images/M11_fbuz.jpg"/><figcaption>направление на санминимум: «Услуги» и «ФБУЗ», выбор ФБУЗ Томской области</figcaption></figure>
+<div class="Content"><strong>Поле «ЛМК» и голограммы.</strong> Если в бумажной книжке 4 голограммы или пометка «Заменить» — нужна замена книжки (поле «ЛМК» в направлении пустое). Не пишите в «ЛМК» слова «требуется / не требуется».</div>
+<div class="keep"><h4 id="s6-4">ОПО — психиатрическое освидетельствование</h4></div>
+<div class="stop"><b>НЕ ВЫДАВАТЬ направления на ОПО!</b><br/>Уже несколько лет ОПО — необязательный документ. При направлении на медосмотр направление на ОПО <u>не создаём и не выдаём</u> — до особого распоряжения. Кнопку «+» напротив «ОПО» в карточке не нажимайте.</div>
+<div class="keep"><h4 id="s6-6">Электронное направление с подписью сотрудника — <span class="redu">ТОЛЬКО ТОМСК</span></h4></div>
+<div class="stop"><b><u>ТОЛЬКО ТОМСК!</u></b><br/>Подписание направления через СМС сотруднику и медосмотр без бумажного направления — <u>только в Томске</u>, в «Центре Консультаций и Медицинских Осмотров». <u>В остальных городах бумажное направление обязательно</u>: распечатать, подписать, выдать сотруднику.</div>
+<ol class="steps">
+<li>Сохраните направление на медосмотр → <b>«Подписать» → «ЭП сотрудника»</b>. Сотруднику придёт СМС с кодом и ссылкой (номера +7 (913) 888-20-01 … 05).</li>
+<li><span class="who emp">Сотрудник</span> открывает ссылку, ставит галочку «Я ознакомился…», вводит код.</li>
+<li>Снова «Подписать» → <b>«ЭП пользователя»</b>. В клинике сотрудник показывает QR-код по той же ссылке.</li>
+</ol>
+<figure class="figure2 three"><img alt="" class="frame" src="images/epd_sign_menu.png"/><img alt="" class="frame" src="images/epd_sms.png"/><img alt="" class="frame" src="images/epd_sign_menu2.png"/><figcaption>«ЭП сотрудника» → СМС → «ЭП пользователя»</figcaption></figure>
+<div class="keep"><h4 id="s6-5">Печать и PDF</h4><div class="Content2">Один документ: открыть → «Печать». Несколько: в списке отметить галочками → «Печать». В окне просмотра — «Печать» или «PDF».</div></div>
+
+<!-- ===================== 7 ===================== -->
+<div class="keep sec"><h3 id="s7">7. Результаты: даты, комментарии, СЭМД</h3><div class="keep"><h4 id="s7-1">Следите за «Комментарием» направления</h4><div class="Content2">Весь ход оформления пишется в поле <b>«Комментарии»</b> направления на санминимум и в виджете «Замечания ФБУЗ». Даты аттестации и сроки загружаются сами при завершении оформления ЭЛМК. Найти направление: «Документы → Направления → Санминимум» → номер в поиске → «Фильтр».</div></div></div>
+
+
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M12_sanmin_comment.jpg"/><figcaption>поиск направления по номеру и «Комментарии» с ходом оформления</figcaption></figure>
+<div class="keep"><h4 id="s7-2">СЭМД — держите на контроле</h4><div class="Content"><strong>Передача СЭМД затягивается.</strong> СЭМД — электронный документ медцентра о пройденном медосмотре; пока медцентр не передаст его в ЕГИСЗ, ЭЛМК не оформят. Раз в 1–2 дня проверяйте «Комментарии» направления на санминимум. «Ожидание информации о медицинском осмотре» дольше нескольких дней — сотрудник идёт в медцентр с требованием передать СЭМД в ЕГИСЗ и просит полный номер: <span class="mono">230.ХХ.ГГ.ММ.NNNNNNNNN</span>. В ФБУЗ звонить не нужно.</div></div>
+
+<div class="keep"><h4 id="s7-3">«Проверить ЛМК» — когда даты не пришли</h4><div class="Content"><strong>СУПЕРВАЖНО!</strong> Если ЭЛМК оформлялась <b>без направления на санминимум</b> (новый медосмотр, а аттестация действующая) — данные о медосмотре <b>автоматически НЕ придут</b>. После получения ЭЛМК: карточка → <b>«Проверить ЛМК» → «Проверка ЭЛМК» → «Перенести»</b>.</div></div>
+
+<div class="keep"><h4 id="s7-4">Вручную по бумажной книжке</h4></div>
+<div class="cols">
+<div class="col"><div class="tag">Медосмотр</div>
+<div class="Content2">Раздел V «Заключение врача о допуске к работе»: слева дата прохождения, в штампе — действует до. В направлении внесите «Дата прохождения» — «Действует по» подставится сам (+1 год).</div>
+<figure class="figure"><img alt="" class="frame narrow" src="images/stamp_mo.jpg"/><figcaption>штамп медосмотра</figcaption></figure></div>
+<div class="col"><div class="tag">Санминимум</div>
+<div class="Content2">Стр. 28, «Профессиональная гигиеническая подготовка»: слева дата аттестации, в штампе — следующая. Вносите <b>оба</b> поля вручную (бывает на 1 и на 2 года).</div>
+<figure class="figure"><img alt="" class="frame narrow" src="images/stamp_sanmin.jpg"/><figcaption>штамп с голограммой</figcaption></figure></div>
+</div>
+<div class="Content2">Частые ошибки: «Дата прохождения не может быть ранее даты документа!» и «… позднее текущей даты!» — проверьте дату.</div>
+<!-- ===================== 8 ===================== -->
+<div class="keep sec"><h3 id="svac">8. Прививки (документ «Мед.данные»)</h3><div class="Content"><strong>Без прививок ЭЛМК не оформят.</strong> Внесите прививки до оформления медкнижки. На медосмотр сотрудник берёт <b>прививочный сертификат</b>.</div></div>
+
+<div class="keep"><h4 id="svac-1">Какие прививки нужны работникам торговли</h4></div>
+<div class="table-wrap"><table><thead><tr><th>Прививка</th><th>Кому</th><th>Схема</th></tr></thead><tbody>
+<tr><td><b>Гепатит B</b></td><td>18–55 лет, не привитые</td><td>3 дозы: 0–1–6 месяцев</td></tr>
+<tr><td><b>Корь</b></td><td>18–35 лет; торговля — до 55</td><td>2 прививки — ничего; 1 — ещё одна; нет сведений — 2 с интервалом ≥ 3 мес.</td></tr>
+<tr><td><b>Краснуха</b></td><td>Женщины 18–25 лет</td><td>Не привитые / однократно / без сведений — прививка</td></tr>
+<tr><td><b>Дифтерия, столбняк</b></td><td>С 18 лет</td><td>Каждые 10 лет</td></tr>
+<tr><td><b>Грипп</b></td><td>Работники торговли</td><td>Ежегодно</td></tr>
+</tbody></table></div>
+<div class="Content2">По эпидпоказаниям: шигеллёз (дизентерия), гепатит A, брюшной тиф. Основание — национальный календарь прививок (приказ Минздрава № 1122н).</div>
+<figure class="figure"><img alt="" class="frame narrow tall" src="images/vaccines.jpg"/><figcaption>памятка по вакцинации и названия вакцин в сертификате</figcaption></figure>
+<div class="keep"><h4 id="svac-2">Как внести прививки</h4></div>
+<ol class="steps">
+<li>Карточка → «+» напротив <b>«Мед.данные»</b>.</li>
+<li>В документе нажмите <b>«+»</b> над таблицей.</li>
+<li>«Показатель» → <b>«…»</b> → отметьте прививку → <b>«Выбрать»</b>. Дозы гепатита B и кори — отдельными строками «(1д)», «(2д)».</li>
+<li><b>«Дата события»</b> — дата из сертификата → «Сохранить». Повторите для каждой прививки.</li>
+<li>«Сохранить» документ.</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M13_med_new.jpg"/><img alt="" class="frame" src="images/M14_med_row.jpg"/><figcaption>новый документ «Мед.данные» и строка прививки</figcaption></figure>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M15_med_pick.jpg"/><figcaption>выбор прививки</figcaption></figure>
+<div class="Content"><strong>Документ «Мед.данные» нельзя изменить или дополнить.</strong> После сохранения он «Обработан». Новые прививки — новым документом через «+».</div>
+<figure class="figure"><img alt="" class="frame narrow" src="images/med_doc_done.jpg"/><figcaption>обработанный документ: только «Отменить»</figcaption></figure>
+<!-- ===================== 9 ===================== -->
+<div class="keep sec"><h3 id="s8">9. Электронная медкнижка (ЭЛМК)</h3><div class="Content2">Участвуют двое: <span class="who um">Управляющий</span> — в ИС «ЛМК-Контроль», <span class="who emp">Сотрудник</span> — на Госуслугах и Гигтесте. Обычный случай (новый сотрудник или истекли оба допуска):</div></div>
+
+<div class="flow">
+<div class="fstep um"><b>1. Управляющий</b><span>карточка, прививки, медосмотр с типом «ЭЛМК», санминимум с услугой «ЭЛМК», подпись ЭП</span></div>
+<div class="fstep emp"><b>2. Сотрудник</b><span>медосмотр: паспорт, направление, прививочный сертификат</span></div>
+<div class="fstep emp"><b>3. Сотрудник</b><span>заявление «Оформить медкнижку» на Госуслугах</span></div>
+<div class="fstep emp"><b>4. Сотрудник</b><span>аттестация на gigtest.ru, «Сдан»</span></div>
+<div class="fstep um"><b>5. Управляющий</b><span>следит за «Комментарием», СЭМД и замечаниями ФБУЗ</span></div>
+</div>
+<div class="keep"><h4 id="s8-2">9.1. Шаги управляющего</h4></div>
+<ol class="steps um">
+<li>Направление на санминимум: «Услуги» = <b>«ЭЛМК»</b>, «ФБУЗ» = <b>Томская область</b> → «Сохранить».</li>
+<li>Откройте направление → <b>«Подписать» → «ЭП пользователя»</b> → пароль. На телефоне кнопка правее — сдвиньте экран вбок.</li>
+<li>Проверьте значок подписи с <b>зелёной отметкой</b> в правом нижнем углу.</li>
+<li>Передайте сотруднику шаги 9.2 и 9.3 (можно ссылкой на эту страницу).</li>
+</ol>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M12_sanmin_comment.jpg"/><figcaption>кнопка «Подписать» и значок подписи</figcaption></figure>
+<div class="Content"><strong>Нет кнопки «Подписать»?</strong> ☰ → <b>«Сервис» → «Получить ЭП»</b> → по указаниям системы. Затем снова «Подписать» → «ЭП пользователя».</div>
+<div class="keep"><h4 id="s8-3">9.2. Шаги сотрудника: Госуслуги</h4></div>
+<ol class="steps emp">
+<li>Госуслуги → поиск <b>«ЭЛМК»</b> → <b>«Оформить медкнижку»</b> → «Начать».</li>
+<li>Если ЭЛМК уже была — <b>«Внести изменения в личную электронную медкнижку»</b>, причина <b>«Продление»</b>.</li>
+<li>Проверьте ФИО, телефон, почту, адрес регистрации → «Верно». Фактический адрес — «Да», если совпадает.</li>
+<li><b>Виды работ — ТОЛЬКО:</b> «Работы, при выполнении которых осуществляется контакт с пищевыми продуктами в процессе их производства, хранения, транспортировки и реализации» → «Продолжить».</li>
+<li><b>Виды продукции — ВСЕ, КРОМЕ</b> «Организация питания детей и подростков» → «Продолжить».</li>
+<li>Регион <b>«Томская область»</b>, галочка <b>«Подать во ФБУЗ»</b> → <b>«Отправить заявление»</b>.</li>
+</ol>
+<div class="keep"><h4 id="s8-4">9.3. Шаги сотрудника: Гигтест</h4></div>
+<ol class="steps emp">
+<li><a href="https://gigtest.ru" target="_blank">gigtest.ru</a> → «Вы можете войти через Госуслуги» → «Продолжить».</li>
+<li>Регион <b>«Томская область»</b> → <b>ФБУЗ «Центр гигиены и эпидемиологии в Томской области», Томск, Елизаровых 56</b>. Уже был зарегистрирован — «Профиль» → этот ФБУЗ → «Изменить».</li>
+<li><b>«Гигиеническое обучение работников продовольственной торговли»</b> → <b>«Оплата в кассе»</b>.</li>
+<li>Лекции → <b>«Начать тест (Основной экзамен)»</b>. В протоколе — <b>«Сдан»</b>, иначе пересдать.</li>
+</ol>
+<figure class="figure"><img alt="" class="frame narrow" src="images/gigtest_fbuz.png"/><figcaption>Гигтест: ФБУЗ Томской области</figcaption></figure>
+<div class="keep"><h4 id="s8-5">9.4. Особые случаи</h4></div>
+<div class="table-wrap"><table><thead><tr><th>Ситуация</th><th><span class="who um">Управляющий</span></th><th><span class="who emp">Сотрудник</span></th></tr></thead><tbody>
+<tr><td><b>Аттестация действует, истёк медосмотр</b></td><td>Только направление на медосмотр. После ЭЛМК — «Проверить ЛМК» → «Проверка ЭЛМК» → «Перенести».</td><td>Медосмотр. Заявление в <b>ФБУЗ последней аттестации</b>, через пару часов звонок туда: «внесите в ЭЛМК действующую аттестацию». Бесплатно.</td></tr>
+<tr><td><b>Медосмотр действует, истёк санминимум</b></td><td>Направление на санминимум с «ЭЛМК», подписать.</td><td>Госуслуги + Гигтест. Медосмотр из бумажной книжки — через медцентр (передача СЭМД).</td></tr>
+<tr><td><b>ЭЛМК есть, прошли новый медосмотр / санминимум</b></td><td>После переоформления — «Проверка ЭЛМК» → «Перенести».</td><td>Заявление на <b>переоформление (продление)</b>, не новое.</td></tr>
+<tr><td><b>ЭЛМК в другом регионе</b></td><td>«Проверить ЛМК» → «Проверка ЭЛМК».</td><td>—</td></tr>
+</tbody></table></div>
+<div class="keep"><h4 id="s8-6">9.5. Замечания ФБУЗ и как их исправить</h4></div>
+<div class="table-wrap"><table><thead><tr><th>Замечание</th><th>Кто</th><th>Что сделать</th></tr></thead><tbody>
+<tr><td>Виды работ не позволяют продолжить оказание услуг</td><td><span class="who emp">Сотрудник</span></td><td>Отозвать заявление и подать заново (9.2, пункты 4–5).</td></tr>
+<tr><td>Услуги в направлении не позволяют оформить ЭЛМК</td><td><span class="who um">Управляющий</span></td><td>«Услуги» = «ЭЛМК» → подписать.</td></tr>
+<tr><td>Отсутствует заявление на оформление ЭЛМК</td><td><span class="who emp">Сотрудник</span></td><td>Подать заявление. Проверка: «Проверить ЛМК» → «Проверить подачу заявления».</td></tr>
+<tr><td>Документ не подписан ЭП</td><td><span class="who um">Управляющий</span></td><td>Открыть направление → «Подписать».</td></tr>
+<tr><td>Ожидание информации о медицинском осмотре</td><td><span class="who emp">Сотрудник</span></td><td>Медцентр должен передать СЭМД в ЕГИСЗ (<a href="#s7-2">раздел 7</a>).</td></tr>
+<tr><td>Заявление зарегистрировано. Ожидание медосмотра и санминимума</td><td>—</td><td>Не ошибка: ждём медосмотр и аттестацию.</td></tr>
+</tbody></table></div>
+<!-- ===================== 10 ===================== -->
+<div class="keep sec"><h3 id="s9">10. Отчёты</h3><div class="Content2">☰ → «Отчёты» → отчёт (например, «Риски медосмотры») → период, подразделение → <b>«Сформировать»</b> → «Печать» или «PDF».</div></div>
+
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M20_report.jpg"/><figcaption>параметры отчёта</figcaption></figure>
+<!-- ===================== 11 ===================== -->
+<div class="keep sec"><h3 id="s10">11. Запрос журналов по охране труда</h3><div class="Content2">Обязательно при открытии нового магазина.</div></div>
+
+<ol class="steps">
+<li>«Документы» → «Охрана труда» → <b>«Запрос журналов»</b> → <b>«Создать»</b>.</li>
+<li>Нажмите <b>«+»</b> → <b>«Тип журнала»</b>: «Журнал регистрации вводного инструктажа ОТ», «Журнал учета регистрации инструктажа на рабочем месте», «Электробезопасность». <b>«Причина»</b>: для нового магазина — <b>«новое ОСП»</b> (ещё: закончился, утрачен, испорчен) → «Сохранить». Повторите для каждого журнала.</li>
+<li>Нажмите <b>«В работу»</b>.</li>
+<li>Когда пакет придёт в магазин — откройте документ → <b>«Принять»</b>.</li>
+</ol>
+<div class="Content"><strong>Аптечки не заказывать</strong> — в списке помечено «временно не поставляется».</div>
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M17_journal_new.jpg"/><img alt="" class="frame" src="images/M18_journal_row.jpg"/><figcaption>запрос журналов: «+», тип и причина, «В работу»</figcaption></figure>
+<div class="Content2">Статусы: Запрошено → Отправлено → Принято (бывают «Отказано», «Уточнение»).</div>
+<!-- ===================== 12 ===================== -->
+<div class="keep sec"><h3 id="sppz">12. Протоколы проверки знаний ОТ (ППЗ)</h3><div class="Content2">Протоколы готовит служба охраны труда (Павлова А.В.) и регистрирует в Минтруде. При статусе <b>«Подтвержден МТ»</b> вам придёт письмо.</div></div>
+
+<ol class="steps">
+<li>«Документы» → «Образование» → <b>«ППЗ»</b> (или строка «ППЗ» в карточке сотрудника) → откройте протокол.</li>
+<li><b>«Печать»</b> → <b>«Получен исполнителем»</b>.</li>
+<li>Сотрудники подписали → <b>«Подписан сотрудниками»</b>.</li>
+<li>Отправили оригинал членам комиссии → <b>«Оригинал отправлен»</b>.</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame" src="images/M19_ppz.jpg"/><img alt="" class="frame" src="images/ppz_doc.png"/><figcaption>список ППЗ с фильтром по статусу и протокол</figcaption></figure>
+<div class="Content2">Статусы: Создан → На обработке в МТ → Подтвержден МТ → <b>Получен исполнителем → Подписан сотрудниками → Отправлен</b> → Документооборот завершен.</div>
+<!-- ===================== 13 ===================== -->
+<div class="keep sec"><h3 id="smail">13. Письма от системы на почту</h3></div>
+<div class="table-wrap"><table><thead><tr><th>Письмо о чём</th><th>Что сделать</th></tr></thead><tbody>
+<tr><td>Через 30 дней истекает медосмотр / санминимум</td><td>Выдать направление. Письма идут, пока не пройдёт.</td></tr>
+<tr><td>Изменения по направлениям, ЭЛМК, замечания ФБУЗ</td><td>Проверить «Комментарий», устранить замечание.</td></tr>
+<tr><td>Перевод: запрос, согласование, отказ</td><td>Согласовать / проверить сотрудника в справочнике.</td></tr>
+<tr><td>Запрос журналов: отправлено</td><td>Получить пакет → «Принять».</td></tr>
+<tr><td>ППЗ: «Подтвержден МТ»</td><td>Распечатать, отметить статусы.</td></tr>
+</tbody></table></div>
+<!-- ===================== 14 ===================== -->
+<div class="keep sec"><h3 id="ssrv">14. Раздел «Сервис»</h3><figure class="figure phone"><img alt="" class="frame narrow" src="images/M02_menu2.jpg"/><figcaption>меню «Сервис»</figcaption></figure></div>
+
+<div class="table-wrap"><table><thead><tr><th>Пункт</th><th>Зачем</th></tr></thead><tbody>
+<tr><td><b>Справка</b></td><td>Все инструкции системы и обучающие ролики: алгоритм, инструкция ИС, пошаговая инструкция, регламент ЭЛМК, ролики.</td></tr>
+<tr><td><b>Сообщения</b></td><td>«Быстрые сообщения» — переписка с пользователями системы; колокольчик — подписка на PUSH.</td></tr>
+<tr><td>Заметки, Корзина, Почта</td><td>Личные заметки, удалённые записи, письма системы.</td></tr>
+<tr><td><b>Получить ЭП</b></td><td>Электронная подпись пользователя — нужна для «Подписать» в направлениях.</td></tr>
+<tr><td>Доступ по QR</td><td>Вход на другом устройстве по QR-коду.</td></tr>
+<tr><td><b>Регистрация ключа авторизации</b></td><td>Вход по Face ID / отпечатку (<a href="#s2-3">раздел 2</a>).</td></tr>
+</tbody></table></div>
+<figure class="figure phone"><img alt="" class="frame narrow" src="images/M21_help.jpg"/><figcaption>«Справка»: инструкции и ролики системы</figcaption></figure>
+<!-- ===================== 15 ===================== -->
+<div class="keep sec"><h3 id="s11">15. Техподдержка и вопросы</h3><div class="Content2">Сначала — «Сервис» → «Справка». Техподдержка ИС (сбои, ошибки): <b><a href="mailto:support@hbis.one">support@hbis.one</a></b></div></div>
+
+<ol class="steps">
+<li>Каждое обращение — <b>новое письмо</b>, не ответ на старое. По текущей заявке — «Ответить», свой текст в начало.</li>
+<li><b>Осмысленная тема</b> до 250 символов. «СРОЧНО», «ПОМОГИТЕ», «МАГАЗИН Т199» — низкий приоритет.</li>
+<li>Что случилось и что делали до этого.</li>
+<li>С <b>корпоративной почты</b>, на которую зарегистрирована учётная запись.</li>
+<li><b>Без вложений</b> — фото и скриншоты только по запросу поддержки.</li>
+<li><b>Подпись</b>: ФИО, должность, № ОСП, адрес, почта, телефоны.</li>
+</ol>
+<div class="sample"><div class="tag">Образец подписи</div>
+            С уважением, управляющий магазином<br/>Иванова Мария<br/>г. Новосибирск, ул. Попова, 17, ОСП №Н222<br/>e-mail: N222@ya-retail.ru<br/>тел. моб.: 8-952-000-00-00</div>
+<div class="Content2">Методические вопросы (медосмотры, ЭЛМК, журналы, ППЗ) — служба охраны труда: <b>Павлова Ангелина Владимировна</b>, <a href="mailto:av.pavlova@ya-retail.ru">av.pavlova@ya-retail.ru</a>, (3822) 706-747 доб. 3234.</div>
+<!-- ===================== 16 ===================== -->
+<div class="keep sec"><h3 id="s12">16. Обучающие ролики</h3><div class="Content2">Сняты на старой версии: внешний вид отличается, кнопка «В путь» теперь «В работу».</div></div>
+
+<ul class="links">
+<li><a href="https://u.hbis.one/?l=5B6ukpmHA50" target="_blank">Справочник «Сотрудники»</a> · 9 мин</li>
+<li><a href="https://u.hbis.one/?l=pg0WQy3In2o" target="_blank">Создание направлений</a> · 11 мин</li>
+<li><a href="https://u.hbis.one/?l=2lZhM6mMKc" target="_blank">Регистрация медосмотра и санминимума</a> · 9 мин</li>
+<li><a href="https://u.hbis.one/?l=CHcgtxGCNos" target="_blank">Документ «Перевод»</a> · 2,5 мин</li>
+<li><a href="https://u.hbis.one/?l=CHcgtxGdNa" target="_blank">Запрос журналов</a> · 2 мин</li>
+<li><a href="https://u.hbis.one/?l=3lZhM6mMKc" target="_blank">Ввод адреса по справочнику</a> · 1,5 мин</li>
+</ul>
+
+      </div></main>
+      <aside class="side" aria-label="Навигация">
+        <div class="panel" id="desktopToc">
+          <div class="head"><div class="h">Оглавление</div>
+            <button class="iconbtn" type="button" id="collapseToc" aria-label="Свернуть/развернуть оглавление" style="width:40px;height:40px;border-radius:14px;"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+          </div>
+          <div class="body" id="tocBody"><ul class="toclist" id="tocList"></ul></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <button class="totop" id="toTop" type="button" aria-label="Наверх"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+  <div class="lb" id="lightbox" aria-hidden="true"><div class="wrap"><img id="lbImg" alt=""><div class="cap" id="lbCap"></div></div></div>
+  <script>
+    function LSg(k){try{return localStorage.getItem(k)}catch(e){return null}}
+    function LSs(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+    (function(){
+      const root = document.documentElement;
+      const storageKey = "ya_lmk_theme";
+      const btnTheme = document.getElementById("toggleTheme");
+      const btnCopy = document.getElementById("copyLink");
+      const progress = document.getElementById("progressbar");
+      const toTop = document.getElementById("toTop");
+      const tocList = document.getElementById("tocList");
+      const tocBody = document.getElementById("tocBody");
+      const collapseBtn = document.getElementById("collapseToc");
+      const mobileTocHost = document.getElementById("mobileToc");
+
+      // Optional theme override using simple invert of prefers. We'll simulate by toggling a class and adjusting tokens.
+      const setMode = (mode) => {
+        // mode: "light" | "dark" | "auto"
+        root.setAttribute("data-mode", mode);
+        LSs(storageKey, mode);
+        // Apply token overrides:
+        const styleId = "mode-overrides";
+        let st = document.getElementById(styleId);
+        if(!st){ st = document.createElement("style"); st.id = styleId; document.head.appendChild(st); }
+        if(mode === "auto"){ st.textContent = ""; return; }
+        if(mode === "dark"){
+          st.textContent = `
+            :root{
+              --bg0:#050816; --bg1:#070b1f; --bg2:#0b1230;
+              --card: rgba(255,255,255,.06);
+              --card2: rgba(255,255,255,.08);
+              --border: rgba(255,255,255,.10);
+              --text:#eaf0ff;
+              --muted: rgba(234,240,255,.70);
+              --shadow: 0 18px 60px rgba(0,0,0,.45);
+              --shadow2: 0 10px 30px rgba(0,0,0,.30);
+              --accent:#7dd3fc; --accent2:#a78bfa;
+              --good:#34d399; --warn:#fbbf24; --bad:#fb7185;
+            }`;
+        }else{
+          st.textContent = `
+            :root{
+              --bg0:#f5f7ff; --bg1:#eef2ff; --bg2:#e8ecff;
+              --card: rgba(17,24,39,.04);
+              --card2: rgba(17,24,39,.06);
+              --border: rgba(17,24,39,.10);
+              --text:#0b1020;
+              --muted: rgba(11,16,32,.65);
+              --shadow: 0 18px 60px rgba(11,16,32,.10);
+              --shadow2: 0 10px 30px rgba(11,16,32,.08);
+              --accent:#2563eb; --accent2:#7c3aed;
+              --good:#059669; --warn:#b45309; --bad:#be123c;
+            }`;
+        }
+      };
+
+      // Load saved mode
+      const saved = LSg(storageKey) || "auto";
+      setMode(saved);
+
+      btnTheme.addEventListener("click", () => {
+        const cur = LSg(storageKey) || "auto";
+        const next = cur === "auto" ? "dark" : (cur === "dark" ? "light" : "auto");
+        setMode(next);
+      });
+
+      btnCopy.addEventListener("click", async () => {
+        try{
+          await navigator.clipboard.writeText(location.href);
+          btnCopy.animate([{transform:"translateY(-1px)"},{transform:"translateY(0px)"}],{duration:180});
+        }catch(e){}
+      });
+
+      // Build TOC from headings (h3/h4) – no new visible text beyond "Оглавление"
+      const headings = [...document.querySelectorAll("main.paper h3[id], main.paper h4[id]")];
+      const makeLink = (h) => {
+        const a = document.createElement("a");
+        a.href = "#" + h.id;
+        a.textContent = h.textContent.trim();
+        a.dataset.level = h.tagName === "H4" ? "4" : "3";
+        return a;
+      };
+
+      const ul = tocList;
+      headings.forEach(h => {
+        const li = document.createElement("li");
+        li.appendChild(makeLink(h));
+        ul.appendChild(li);
+      });
+
+      // Mobile TOC
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.innerHTML = `<span>Оглавление</span><span class="chev" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>`;
+      const body = document.createElement("div");
+      body.className = "body";
+      const ul2 = document.createElement("ul");
+      ul2.className = "toclist";
+      headings.forEach(h => {
+        const li = document.createElement("li");
+        const a = makeLink(h);
+        a.dataset.level = h.tagName === "H4" ? "4" : "3";
+        li.appendChild(a);
+        ul2.appendChild(li);
+      });
+      body.appendChild(ul2);
+      details.appendChild(summary);
+      details.appendChild(body);
+      mobileTocHost.innerHTML = '';
+      mobileTocHost.appendChild(details);
+
+      // Active heading highlighting
+      const observer = new IntersectionObserver((entries)=>{
+        entries.forEach(e=>{
+          const id = e.target.id;
+          // For mobile: multiple links with same href; highlight all
+          document.querySelectorAll(`a[href="#${CSS.escape(id)}"]`).forEach(a => {
+            if(e.isIntersecting) a.classList.add("is-active");
+            else a.classList.remove("is-active");
+          });
+        });
+      }, { rootMargin: "-40% 0px -55% 0px", threshold: 0.01 });
+
+      headings.forEach(h => observer.observe(h));
+
+      // Collapse TOC body
+      let collapsed = false;
+      collapseBtn.addEventListener("click", ()=>{
+        collapsed = !collapsed;
+        tocBody.style.display = collapsed ? "none" : "block";
+      });
+
+      // Reading progress + toTop
+      const onScroll = ()=>{
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        const p = max > 0 ? (doc.scrollTop / max) * 100 : 0;
+        progress.style.width = p.toFixed(2) + "%";
+        if(doc.scrollTop > 600) toTop.classList.add("show");
+        else toTop.classList.remove("show");
+      };
+      window.addEventListener("scroll", onScroll, {passive:true});
+      onScroll();
+
+      toTop.addEventListener("click", ()=> window.scrollTo({top:0, behavior:"smooth"}));
+
+      // Image lightbox (no text changes)
+      const lb = document.getElementById("lightbox");
+      const lbImg = document.getElementById("lbImg");
+      const lbCap = document.getElementById("lbCap");
+      document.querySelectorAll("figure.figure img, figure.figure2 img").forEach(img=>{
+        img.addEventListener("click", ()=>{
+          lbImg.src = img.currentSrc || img.src;
+          const cap = img.closest("figure")?.querySelector("figcaption")?.textContent?.trim() || "";
+          lbCap.textContent = cap;
+          lb.classList.add("show");
+          lb.setAttribute("aria-hidden", "false");
+        });
+      });
+      const closeLb = ()=>{
+        lb.classList.remove("show");
+        lb.setAttribute("aria-hidden", "true");
+        lbImg.removeAttribute("src");
+      };
+      lb.addEventListener("click", closeLb);
+      window.addEventListener("keydown", (e)=>{ if(e.key==="Escape") closeLb(); });
+    })();
+  </script>
+</body></html>

@@ -1,0 +1,934 @@
+<!DOCTYPE html><html lang="ru" data-mode="auto"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Спецодежда на кассе</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+    
+    :root{
+      /* Color tokens */
+      --bg0:#050816;
+      --bg1:#070b1f;
+      --bg2:#0b1230;
+
+      --card: rgba(255,255,255,.06);
+      --card2: rgba(255,255,255,.08);
+      --border: rgba(255,255,255,.10);
+
+      --text:#eaf0ff;
+      --muted: rgba(234,240,255,.70);
+
+      --accent:#7dd3fc;
+      --accent2:#a78bfa;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --shadow2: 0 10px 30px rgba(0,0,0,.30);
+
+      --r-xl: 22px;
+      --r-lg: 18px;
+      --r-md: 14px;
+
+      --max: 1180px;
+      --content: 860px;
+      --sidebar: 300px;
+
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg0:#f5f7ff;
+        --bg1:#eef2ff;
+        --bg2:#e8ecff;
+        --card: rgba(17,24,39,.04);
+        --card2: rgba(17,24,39,.06);
+        --border: rgba(17,24,39,.10);
+        --text:#0b1020;
+        --muted: rgba(11,16,32,.65);
+        --shadow: 0 18px 60px rgba(11,16,32,.10);
+        --shadow2: 0 10px 30px rgba(11,16,32,.08);
+        --accent:#2563eb;
+        --accent2:#7c3aed;
+        --good:#059669;
+        --warn:#b45309;
+        --bad:#be123c;
+      }
+    }
+
+    *{ box-sizing:border-box; }
+    html{ scroll-behavior:smooth; }
+    body{
+      margin:0;
+      font-family: var(--font);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 60%),
+        radial-gradient(900px 700px at 90% 10%, color-mix(in oklab, var(--accent2) 18%, transparent), transparent 60%),
+        radial-gradient(900px 700px at 50% 110%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 65%),
+        linear-gradient(180deg, var(--bg0), var(--bg1) 40%, var(--bg2));
+      min-height:100vh;
+      line-height:1.75;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a{ color: color-mix(in oklab, var(--accent) 92%, white); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+    a:focus-visible{
+      outline:2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+      outline-offset:3px;
+      border-radius:10px;
+    }
+
+    /* Top progress bar */
+    .progress{
+      position:fixed;
+      top:0; left:0;
+      width:100%;
+      height:4px;
+      background: transparent;
+      z-index:1000;
+    }
+    .progress > i{
+      display:block;
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 40%, transparent);
+    }
+
+    /* App shell */
+    .shell{
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 18px 14px 70px;
+    }
+
+    /* Glass header */
+    .topbar{
+      position:sticky;
+      top: 10px;
+      z-index: 20;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      padding: 12px 12px;
+      border-radius: var(--r-xl);
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, color-mix(in oklab, var(--card2) 100%, transparent), color-mix(in oklab, var(--card) 100%, transparent));
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow2);
+    }
+    .brand{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      min-width: 0;
+    }
+    .dot{
+      width: 14px; height: 14px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent2));
+      box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 20%, transparent);
+      flex: 0 0 auto;
+    }
+    .title{
+      font-size: 14px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      letter-spacing: .2px;
+    }
+    .actions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .iconbtn{
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      display:grid;
+      place-items:center;
+      box-shadow: 0 8px 22px rgba(0,0,0,.22);
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .iconbtn:hover{ transform: translateY(-1px); background: color-mix(in oklab, var(--card2) 120%, transparent); }
+    .iconbtn:active{ transform: translateY(0px); }
+    .iconbtn svg{ width: 18px; height:18px; opacity:.92; }
+
+    /* Layout grid */
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    @media (min-width: 980px){
+      .grid{ grid-template-columns: minmax(0, var(--content)) minmax(0, var(--sidebar)); align-items:start; }
+    }
+
+    /* Main card */
+    .paper{
+      border-radius: var(--r-xl);
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, color-mix(in oklab, var(--card2) 95%, transparent), color-mix(in oklab, var(--card) 100%, transparent));
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .paper-inner{
+      padding: 20px 16px 10px;
+    }
+    @media (min-width: 640px){
+      .paper-inner{ padding: 28px 26px 14px; }
+    }
+
+    /* Headings */
+    .Title{
+      margin:0 0 10px;
+      font-size: clamp(20px, 2.2vw, 28px);
+      line-height:1.15;
+      letter-spacing:.2px;
+      font-weight: 820;
+    }
+
+    h4{
+      margin: 20px 0 10px;
+      font-size: 15px;
+      font-weight: 820;
+      color: color-mix(in oklab, var(--text) 92%, transparent);
+      scroll-margin-top: 90px;
+    }
+
+    /* Existing text classes */
+    .Content, .Content2{
+      margin: 10px 0;
+      font-size: 15px;
+      color: color-mix(in oklab, var(--text) 92%, transparent);
+    }
+    .Content2{ color: color-mix(in oklab, var(--text) 84%, transparent); text-indent: 0; }
+    .Content ul{
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+    .Content li{ margin: 6px 0; }
+
+    /* "ForInformation" as info callout */
+    .ForInformation{
+      margin: 14px 0;
+      padding: 14px 14px;
+      border-radius: var(--r-lg);
+      border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
+      background: linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 14%, transparent),
+        color-mix(in oklab, var(--accent2) 10%, transparent));
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+      font-style: italic;
+    }
+
+    /* Automatic warning callout: any .Content containing strong "Внимание!" */
+    .Content:has(strong){
+      /* keep normal unless the first strong is "Внимание!" */
+    }
+    .Content:has(strong:first-child){
+      padding: 14px 14px;
+      border-radius: var(--r-lg);
+      border: 1px solid color-mix(in oklab, var(--bad) 26%, var(--border));
+      border-left: 5px solid color-mix(in oklab, var(--bad) 55%, transparent);
+      background: linear-gradient(180deg,
+        color-mix(in oklab, var(--bad) 12%, transparent),
+        color-mix(in oklab, var(--bad) 7%, transparent));
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    }
+    .Content:has(strong:first-child) strong:first-child{
+      color: color-mix(in oklab, var(--bad) 82%, white);
+    }
+
+    /* Figures */
+    .article{ counter-reset: fig; }
+    figure.figure{
+      counter-increment: fig;
+      margin: 14px 0 18px;
+      padding: 14px;
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+    }
+    figure.figure img{
+      width: 100%;
+      height:auto;
+      display:block;
+      border-radius: 16px;
+      border: 1px solid color-mix(in oklab, var(--border) 100%, transparent);
+      background: color-mix(in oklab, var(--card) 100%, transparent);
+      cursor: zoom-in;
+    }
+    figure.figure figcaption{
+      margin-top: 10px;
+      font-size: 12px;
+      line-height:1.35;
+      color: var(--muted);
+      font-style: italic;
+      text-align:center;
+    }
+    figure.figure figcaption::before{
+      content: "Рисунок " counter(fig) " - ";
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      font-style: normal;
+    }
+
+    /* Figure2 style for multiple images in one figure */
+    figure.figure2{
+      counter-increment: fig;
+      margin: 14px 0 18px;
+      padding: 14px;
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    figure.figure2 img{
+      max-width: 100%;
+      height: auto;
+      display: inline-block;
+      border-radius: 16px;
+      border: 1px solid color-mix(in oklab, var(--border) 100%, transparent);
+      background: color-mix(in oklab, var(--card) 100%, transparent);
+      cursor: zoom-in;
+    }
+    figure.figure2 figcaption{
+      width: 100%;
+      margin-top: 10px;
+      font-size: 12px;
+      line-height:1.35;
+      color: var(--muted);
+      font-style: italic;
+      text-align:center;
+    }
+    figure.figure2 figcaption::before{
+      content: "Рисунок " counter(fig) " - ";
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      font-style: normal;
+    }
+
+    /* Sidebar TOC */
+    .side{
+      position: relative;
+    }
+    .panel{
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+    }
+    .panel .head{
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--border);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .panel .head .h{
+      font-size: 13px;
+      letter-spacing: .25px;
+      color: var(--muted);
+      font-weight: 750;
+    }
+    .panel .body{
+      padding: 10px 10px 12px;
+      max-height: calc(100vh - 160px);
+      overflow:auto;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in oklab, var(--accent) 45%, transparent) transparent;
+    }
+    .panel .body::-webkit-scrollbar{ width: 10px; }
+    .panel .body::-webkit-scrollbar-thumb{
+      background: color-mix(in oklab, var(--accent) 30%, transparent);
+      border-radius: 999px;
+      border: 3px solid transparent;
+      background-clip: content-box;
+    }
+
+    .toclist{ list-style:none; margin:0; padding:0; }
+    .toclist a{
+      display:block;
+      padding: 9px 10px;
+      border-radius: 12px;
+      color: color-mix(in oklab, var(--text) 86%, transparent);
+      border: 1px solid transparent;
+      text-decoration:none;
+      transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    }
+    .toclist a:hover{
+      background: color-mix(in oklab, var(--card2) 110%, transparent);
+      border-color: color-mix(in oklab, var(--border) 120%, transparent);
+      transform: translateY(-1px);
+    }
+    .toclist a[data-level="4"]{
+      padding-left: 22px;
+      color: color-mix(in oklab, var(--text) 72%, transparent);
+      font-size: 13px;
+    }
+    .toclist a.is-active{
+      background: linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 18%, transparent),
+        color-mix(in oklab, var(--accent2) 12%, transparent));
+      border-color: color-mix(in oklab, var(--accent) 22%, var(--border));
+      color: var(--text);
+    }
+
+    /* Mobile TOC (accordion) */
+    .mobiletoc{
+      display:block;
+      margin-top: 14px;
+    }
+    @media (min-width: 980px){
+      .mobiletoc{ display:none; }
+    }
+    .mobiletoc details{
+      border-radius: var(--r-xl);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+    }
+    .mobiletoc summary{
+      list-style:none;
+      cursor:pointer;
+      padding: 14px 14px;
+      color: var(--muted);
+      font-weight: 750;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .mobiletoc summary::-webkit-details-marker{ display:none; }
+    .mobiletoc summary .chev{ opacity:.8; transition: transform .15s ease; }
+    .mobiletoc details[open] summary .chev{ transform: rotate(180deg); }
+    .mobiletoc .body{ padding: 8px 10px 12px; }
+
+    /* Hide old TOC block from the original HTML */
+    nav.toc-old{ display:none !important; }
+
+    /* Floating "to top" */
+    .totop{
+      position: fixed;
+      right: 14px;
+      bottom: 80px;
+      z-index: 30;
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card2) 100%, transparent);
+      box-shadow: var(--shadow2);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .totop.show{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .totop svg{ width: 18px; height: 18px; opacity:.92; }
+
+    /* Lightbox */
+    .lb{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.72);
+      display:none;
+      place-items:center;
+      padding: 18px;
+      z-index: 2000;
+    }
+    .lb.show{ display:grid; }
+    .lb .wrap{
+      max-width: min(1100px, 96vw);
+      max-height: 90vh;
+      display:grid;
+      gap: 10px;
+      align-items:center;
+      justify-items:center;
+    }
+    .lb img{
+      max-width: 100%;
+      max-height: 84vh;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 30px 80px rgba(0,0,0,.55);
+      background: rgba(255,255,255,.03);
+      cursor: zoom-out;
+    }
+    .lb .cap{
+      color: rgba(255,255,255,.78);
+      font-size: 12px;
+      text-align:center;
+    }
+
+    /* Reduce motion */
+    @media (prefers-reduced-motion: reduce){
+      html{ scroll-behavior:auto; }
+      .iconbtn, .toclist a, .totop, .mobiletoc summary .chev { transition:none !important; }
+    }
+    .download-btn{
+      display:block;
+      width:fit-content;
+      margin:0px auto 20px;
+      background:#1e73e8;
+      color:#fff !important;
+      padding:14px 36px;
+      border-radius:18px;
+      font-size:18px;
+      font-weight:600;
+      text-decoration:none !important;
+      box-shadow:0 6px 18px rgba(30,115,232,.35);
+      transition:transform .15s ease, box-shadow .15s ease;
+      text-align:center;
+    }
+
+    .download-btn:hover{
+      transform:translateY(-2px);
+      box-shadow:0 10px 22px rgba(30,115,232,.45);
+    }
+
+    @media (max-width: 979px){
+      /* скрываем нижнее (sidebar) оглавление, оставляем верхнее mobiletoc */
+      .side{ display:none; }
+    }
+  
+    h3{margin:34px 0 10px;font-size:clamp(19px,2vw,23px);line-height:1.25;scroll-margin-top:90px;padding-top:14px;border-top:1px solid var(--border)}
+    h4{font-size:16px}
+    .hero{padding-bottom:6px}
+    .kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+    .hero .Title{margin-top:6px;text-wrap:balance}
+    .download-btn.ghost{background:transparent;color:var(--accent)!important;border:1.5px solid var(--accent);box-shadow:none}
+    .btnrow{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 6px}
+    .btnrow .download-btn{margin:0;font-size:16px;padding:12px 24px}
+    ol.steps{margin:10px 0 14px;padding-left:24px;font-size:15px}
+    ol.steps li{margin:6px 0;padding-left:4px}
+    ol.steps li::marker{font-weight:800;color:var(--accent)}
+    ol.steps.um li::marker{color:var(--accent)} ol.steps.emp li::marker{color:var(--good)}
+    .cols{display:grid;grid-template-columns:1fr;gap:14px;margin:10px 0}
+    @media(min-width:700px){.cols{grid-template-columns:1fr 1fr}}
+    .col{min-width:0;border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;background:color-mix(in oklab,var(--card2) 100%,transparent)}
+    .tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:999px;background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent)}
+    .table-wrap{overflow-x:auto;margin:12px 0 16px;border:1px solid var(--border);border-radius:var(--r-lg)}
+    table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5}
+    th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--border)}
+    th{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:color-mix(in oklab,var(--card2) 140%,transparent)}
+    tr:last-child td{border-bottom:0}
+    .mono{font-family:var(--mono);font-size:.92em;padding:1px 6px;border-radius:6px;background:var(--card2);border:1px solid var(--border);white-space:nowrap}
+    .who{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;white-space:nowrap}
+    .who.um{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent)}
+    .who.emp{background:color-mix(in oklab,var(--good) 18%,transparent);color:var(--good)}
+    .flow{display:grid;grid-template-columns:1fr;gap:8px;margin:12px 0 16px}
+    @media(min-width:760px){.flow{grid-template-columns:repeat(5,1fr)}}
+    .fstep{border-radius:14px;padding:10px 12px;border:1px solid var(--border);display:flex;flex-direction:column;gap:4px;font-size:13.5px;line-height:1.4;min-width:0}
+    .fstep b{font-size:13px}
+    .fstep.um{border-left:4px solid var(--accent);background:color-mix(in oklab,var(--accent) 8%,transparent)}
+    .fstep.emp{border-left:4px solid var(--good);background:color-mix(in oklab,var(--good) 8%,transparent)}
+    .sample{margin:12px 0;padding:12px 14px;border-radius:var(--r-lg);border:1px dashed var(--border);font-size:14px;line-height:1.6}
+    .sample .tag{margin-bottom:6px}
+    ul.links{padding-left:20px;font-size:15px} ul.links li{margin:6px 0}
+    figure.figure img.narrow{width:auto;max-width:min(100%,560px);margin:0 auto}
+    figure.figure2 img{max-width:calc(50% - 6px);width:auto;max-height:440px;object-fit:contain}
+    figure.phone img{max-height:560px;max-width:calc(50% - 6px);width:auto;margin:0 auto}
+    figure.figure.phone img{max-width:300px}
+    .col figure.figure{margin:10px 0 0;padding:8px}
+    .stop{margin:14px 0;padding:14px 16px;border-radius:var(--r-lg);border:2px solid #dc2626;background:color-mix(in oklab,#dc2626 12%,transparent);color:var(--text);font-size:15px;line-height:1.55;break-inside:avoid}
+    .stop b{color:#dc2626;font-size:16px;letter-spacing:.02em}
+    .stop u{text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px}
+    .redu{color:#dc2626;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+    .cases{display:grid;grid-template-columns:1fr;gap:10px;margin:12px 0}
+    @media(min-width:760px){.cases{grid-template-columns:1fr 1fr}}
+    .case{min-width:0;border:1px solid var(--border);border-left:5px solid var(--accent2);border-radius:var(--r-lg);padding:10px 14px;background:color-mix(in oklab,var(--accent2) 6%,transparent);break-inside:avoid}
+    figure.figure2.four img{max-width:calc(25% - 8px)}
+    .printtoc{display:none}
+    @media(min-width:760px){.flow.flow3{grid-template-columns:repeat(3,1fr)}}
+    figure.figure2.phone{align-items:center}
+    figure.phone img.frame{max-width:calc(40% - 8px);max-height:420px}
+    figure.phone img.menu{max-width:18%!important;max-height:300px}
+    @media (max-width:640px){figure.phone img.frame{max-width:100%;max-height:none}figure.phone img.menu{max-width:45%!important}}
+    @media (max-width:640px){
+      .table-wrap table,.table-wrap tbody,.table-wrap tr,.table-wrap td{display:block;width:auto}
+      .table-wrap thead{display:none}
+      .table-wrap tr{padding:8px 0;border-bottom:1px solid var(--border)}
+      .table-wrap tr:last-child{border-bottom:0}
+      .table-wrap td{border:0;padding:3px 12px}
+      .table-wrap td:first-child{font-weight:700}
+      figure.figure2 img{max-width:100%;max-height:none}
+    }
+    @media print{
+      @page{size:A4;margin:12mm 12mm 14mm}
+      :root{--bg0:#fff;--bg1:#fff;--bg2:#fff;--card:#f6f7fb;--card2:#f1f3f9;--border:#d8dce8;--text:#111;--muted:#555;--accent:#1d4ed8;--accent2:#6d28d9;--bad:#be123c;--shadow:none;--shadow2:none;--good:#047857}
+      body{background:#fff!important;font-size:11.5px;line-height:1.42}
+      .Content,.Content2,ol.steps{font-size:11.5px;margin:5px 0}
+      ol.steps li{margin:3px 0;break-inside:avoid}
+      ol.steps{break-inside:avoid}
+      h4 + ol.steps, h4 + .Content2{break-before:avoid}
+      .Content:has(strong:first-child),.ForInformation{padding:8px 10px;margin:8px 0}
+      table{font-size:11px} th,td{padding:5px 8px}
+      thead{display:table-header-group} tr{break-inside:avoid}
+      figure.figure,figure.figure2{margin:6px 0 8px;padding:6px;break-inside:avoid}
+      figure figcaption{margin-top:4px}
+      .progress,.topbar,.mobiletoc,.side,.totop,.lb,.btnrow{display:none!important}
+      .shell{padding:0;max-width:none}.grid{display:block;margin:0}
+      .paper{border:0;box-shadow:none;background:#fff;overflow:visible}.paper-inner{padding:0 3px}
+      .printtoc{display:block;margin:8px 0 14px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;font-size:10.5px;line-height:1.3;columns:2;column-gap:18px}
+      .printtoc a{color:#1d4ed8;text-decoration:none}
+      .printtoc ol{margin:2px 0;padding-left:0;list-style:none}.printtoc ol ol{padding-left:14px}.printtoc li{margin:1px 0;break-inside:avoid}
+      .keep{break-inside:avoid}
+      .keep.sec{margin-top:5mm}
+      .table-wrap{overflow:visible!important;display:block}
+      .flow,.col,.sample,.Content,.Content2,.ForInformation{break-inside:avoid}
+      .flow{grid-template-columns:repeat(5,1fr)!important}
+      .flow.flow3{grid-template-columns:repeat(3,1fr)!important}
+      .cols{grid-template-columns:1fr 1fr!important}
+      h3{border-top:0;margin:0 0 6px;padding-top:0;font-size:17px;break-after:avoid}
+      h4{margin:12px 0 5px;font-size:13px;break-after:avoid}
+      .Content2:has(+ ol),.Content2:has(+ figure),.Content2:has(+ .table-wrap){break-after:avoid}
+      figure.figure img{max-height:85mm;width:auto;max-width:100%;margin:0 auto}
+      figure.figure img.tall{max-height:150mm}
+      figure.figure2 img{max-height:70mm;max-width:calc(50% - 6px)}
+      figure.phone img{max-height:72mm!important;max-width:calc(40% - 8px)!important}
+      figure.phone img.menu{max-height:62mm!important;max-width:17%!important}
+      figure.figure.phone img{max-width:60mm!important}
+      .ForInformation,.Content:has(strong:first-child){box-shadow:none}
+      a{color:#1d4ed8}
+    }
+</style>
+<style id="mode-overrides"></style>
+</head><body>
+  <div class="progress" aria-hidden="true"><i id="progressbar"></i></div>
+  <div class="shell article" id="top">
+    <div class="topbar">
+      <div class="brand"><div class="dot" aria-hidden="true"></div><div class="title">Спецодежда · заказ и учёт</div></div>
+      <div class="actions">
+        <button class="iconbtn" type="button" id="toggleTheme" aria-label="Переключить тему"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="2"></path><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M5 19l1.5-1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button>
+        <a class="iconbtn" href="specodezhda.pdf" target="_blank" aria-label="Скачать PDF" title="Скачать PDF" style="color:inherit;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></a>
+        <button class="iconbtn" type="button" id="copyLink" aria-label="Скопировать ссылку на страницу"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></button>
+      </div>
+    </div>
+    <div class="mobiletoc" id="mobileToc"></div>
+    <div class="grid">
+      <main class="paper"><div class="paper-inner">
+ <div class="hero">
+<h1 class="Title">Спецодежда: заказ и учёт на кассе</h1>
+<div class="Content2">Кто заказывает форму, где это делается на кассе, какие есть размеры и что делать с возвратом, выдачей и инвентаризацией. Собрано из инструкции «Заказ и учёт спецодежды на магазине». Красной рамкой на картинках — что нажать.</div>
+</div>
+<nav class="printtoc"><b>Содержание</b><ol><li><a href="#s0">Кто заказывает и что нужно заранее</a><ol><li><a href="#s0-0">Новый магазин: сначала доступ к кассе — потом форма</a></li><li><a href="#s0-1">Лимиты</a></li><li><a href="#s0-2">Какие размеры и позиции есть</a></li></ol></li><li><a href="#s1">1. Где это на кассе</a></li><li><a href="#s2">2. Заказ</a></li><li><a href="#s3">3. Возврат / списание</a></li><li><a href="#s4">4. Информация</a></li><li><a href="#s5">5. Выдача (от директора продавцу)</a></li><li><a href="#s6">6. Инвентаризация</a></li><li><a href="#s7">7. Возврат СО на РЦ</a></li><li><a href="#s8">Короткий чек-лист для открытия</a></li></ol></nav>
+<div class="keep sec"><h3 id="s0">Кто заказывает и что нужно заранее</h3></div>
+<div class="cols">
+<div class="col"><div class="tag">Чаще всего — команда открытия</div>
+<div class="Content2">Сотрудники команды открытия при первой возможности помогают директору заказать форму с кассы на всю команду магазина.</div></div>
+<div class="col"><div class="tag">Директор — сам</div>
+<div class="Content2">Директор может заказать форму и сам, если выполнены оба условия:</div>
+<ul class="links">
+<li>на кассу прогружены <b>права старшего продавца</b>;</li>
+<li>на кассу прогружен <b>день трудоустройства</b> сотрудника. Пока его нет, сотрудника не будет в списке по кнопке «Сотрудник».</li>
+</ul></div>
+</div>
+<div class="keep"><h4 id="s0-0">Новый магазин: сначала доступ к кассе — потом форма</h4></div>
+<div class="flow flow3">
+<div class="fstep um"><b>1. Заявка на доступ</b><span>в день заказа размена, печати и доверенности — заявка в ЯК на доступ к кассе себе; продавцам напомнить сделать то же. <b>За день до приёмки</b> — проверить, что доступ есть; нет — поторопить по заявке</span></div>
+<div class="fstep um"><b>2. Доступ получен</b><span>на кассу прогружены права старшего продавца и дни трудоустройства сотрудников</span></div>
+<div class="fstep emp"><b>3. Заказ формы</b><span>только теперь заказываем — с командой открытия или сам</span></div>
+</div>
+<div class="stop"><b>БЕЗ ДОСТУПА К КАССЕ ФОРМУ НЕ ЗАКАЗАТЬ</b><br/>Пока нет доступа к кассе, нельзя заказать форму, нельзя пробить чек и нельзя распечатать документы на приём. Поэтому заявку в ЯК на доступ к кассе создаём <u>заранее</u>: в тот же день, когда заказываем <b>размен, печать и доверенность</b>. <u>За день до приёмки</u> проверяем, что доступ уже есть.</div>
+<div class="keep"><h4 id="s0-1">Лимиты</h4></div>
+<div class="table-wrap"><table><thead><tr><th>Кто</th><th>Сколько комплектов</th><th>Что будет при превышении</th></tr></thead><tbody>
+<tr><td>Продавец</td><td>1 комплект</td><td>Касса не даст заказать: «Превышен лимит заказа на одного сотрудника!»</td></tr>
+<tr><td>Директор</td><td>3 комплекта: 1 основной + 2 запасных</td><td>Если на директоре уже числится подходящий размер, касса не даст заказать: «На директоре числятся свободные позиции. Заказ сверх нормы не возможен!» — сначала выдайте этот комплект через «Выдача».</td></tr>
+</tbody></table></div>
+<div class="keep"><h4 id="s0-2">Какие размеры и позиции есть</h4><div class="Content2">Всё выбирается кнопкой «Номенклатура». Список листается кнопками «Вперёд» / «Назад».</div></div>
+
+<div class="table-wrap"><table><thead><tr><th>Позиция</th><th>Размеры в списке</th></tr></thead><tbody>
+<tr><td>Рубашка женская (униформа и лёгкая)</td><td>р. 44, 46, 48, 50, 52, 54, 56</td></tr>
+<tr><td>Рубашка мужская (униформа и лёгкая)</td><td>р. 48, 50, 52, 54</td></tr>
+<tr><td>Толстовка, халат женский / мужской</td><td>варианты — в списке «Номенклатура»</td></tr>
+<tr><td>Для пекаря</td><td>фартук, колпак</td></tr>
+<tr><td>Прочее</td><td>кепка-козырёк, галстук, фартук с карманом</td></tr>
+</tbody></table></div>
+<figure class="figure"><img alt="" class="frame narrow tall" src="images/s3_1.jpg"/><figcaption>список номенклатуры (стр. 1 из 2)</figcaption></figure>
+<div class="Content"><strong>Размер уточните у сотрудника до заказа</strong>. Если пришёл не тот размер или не та позиция — оформите «Возврат СО на РЦ» <b>в течение 5 дней</b> после приёмки.</div>
+<div class="keep sec"><h3 id="s1">1. Где это на кассе</h3></div>
+<ol class="steps">
+<li>На кассе откройте <b>«Операции старшего продавца»</b>.</li>
+<li>Нажмите <b>«Спецодежда»</b>. Откроется меню с шестью кнопками.</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame" src="images/s1_1.jpg"/><img alt="" class="frame menu" src="images/menu_all.png"/><figcaption>Операции старшего продавца → Спецодежда → меню</figcaption></figure>
+<div class="stop"><b>ОДИН СОТРУДНИК — ОДИН АКТ</b><br/>Любое действие (заказ, возврат, выдача, инвентаризация, возврат на РЦ) оформляется строго на <u>одного</u> сотрудника: выбрали сотрудника → выбрали позиции → «Сохранить» → распечатался чек. Только потом — следующий сотрудник.</div>
+<div class="table-wrap"><table><thead><tr><th>Кнопка</th><th>Зачем</th></tr></thead><tbody>
+<tr><td>Заказ</td><td>заказать форму сотруднику (в пределах лимита)</td></tr>
+<tr><td>Возврат</td><td>снять форму с продавца (и с уволенного): износ 50% — переходит на баланс директора, износ 100% — списывается</td></tr>
+<tr><td>Информация</td><td>посмотреть, что числится на руках и что заказано</td></tr>
+<tr><td>Выдача</td><td>передать запасной комплект от директора продавцу</td></tr>
+<tr><td>Инвентаризация</td><td>сверить, сколько формы фактически у сотрудника</td></tr>
+<tr><td>Возврат СО на РЦ</td><td>вернуть на РЦ то, что пришло не по заказу (5 дней)</td></tr>
+</tbody></table></div>
+<div class="keep sec"><h3 id="s2">2. Заказ</h3></div>
+<ol class="steps">
+<li>В меню «Спецодежда» нажмите <b>«Заказ»</b> — откроется форма «Заказ спецодежды».</li>
+<li>Нажмите <b>«Сотрудник»</b> и выберите человека. Его ФИО появится сверху формы.</li>
+<li>Нажмите <b>«Номенклатура»</b> и выберите нужные позиции и размеры.</li>
+<li>Проверьте строки и нажмите <b>«Сохранить»</b>. Распечатается чек.</li>
+</ol>
+<figure class="figure2 three phone"><img alt="" class="frame menu" src="images/menu_zakaz.png"/><img alt="" class="frame" src="images/s2_1.png"/><img alt="" class="frame" src="images/s2_3.png"/><figcaption>«Заказ» → «Сотрудник» → ФИО сверху формы</figcaption></figure>
+<figure class="figure2"><img alt="" class="frame" src="images/s3_3.png"/><img alt="" class="frame" src="images/s3_5.png"/><figcaption>«Номенклатура» → «Сохранить»</figcaption></figure>
+<div class="Content2">Если касса выдаёт «Превышен лимит заказа на одного сотрудника!» — у сотрудника уже есть комплект по норме. Если «На директоре числятся свободные позиции» — сначала выдайте сотруднику запасной комплект директора (раздел 5).</div>
+<div class="keep sec"><h3 id="s3">3. Возврат / списание</h3><div class="Content2">Нужен, чтобы снять форму с сотрудника, в том числе с уволенного. Уволенные видны в списке на возврат <b>две недели</b> с даты увольнения — не затягивайте.</div></div>
+
+<ol class="steps">
+<li>Нажмите <b>«Возврат»</b> — откроется «Возврат/списание спецодежды».</li>
+<li><b>«Сотрудник»</b> → выберите человека.</li>
+<li><b>«Номенклатура»</b> → выберите позицию.</li>
+<li>Появится окно <b>«Выберите % износа»</b>: <b>50%</b> — форма переходит на баланс директора (можно выдать другому); <b>100%</b> — форма списывается.</li>
+<li>В таблице появится строка: позиция, количество, сотрудник, % износа. Нажмите <b>«Сохранить»</b> → «Документ сохранён», распечатается чек.</li>
+</ol>
+<figure class="figure2 three phone"><img alt="" class="frame menu" src="images/menu_vozvrat.png"/><img alt="" class="frame" src="images/s4_1.png"/><img alt="" class="frame" src="images/s5_3.png"/><figcaption>«Возврат» → «Сотрудник» → «Номенклатура»</figcaption></figure>
+<figure class="figure2 three"><img alt="" class="frame" src="images/s5_7.png"/><img alt="" class="frame" src="images/s5_9.png"/><img alt="" class="frame" src="images/s5_1.png"/><figcaption>% износа → строка в таблице → «Сохранить»</figcaption></figure>
+<div class="Content"><strong>«Не удалось получить список спецодежды»</strong> при выборе сотрудника значит, что на его балансе формы нет — возвращать нечего.</div>
+<div class="keep sec"><h3 id="s4">4. Информация</h3><div class="Content2">Кнопка <b>«Информация»</b> открывает «Спецодежда у сотрудников»: по каждому — какая форма числится «на руках» и какое «количество заказано». Удобно проверить перед заказом, чтобы не упереться в лимит.</div></div>
+
+<figure class="figure2 phone"><img alt="" class="frame menu" src="images/menu_info.png"/><img alt="" class="frame" src="images/s6_1.jpg"/><figcaption>«Информация» → таблица по сотрудникам</figcaption></figure>
+<div class="keep sec"><h3 id="s5">5. Выдача (от директора продавцу)</h3><div class="Content2">Для выдачи запасных комплектов, которые числятся на директоре (заказанные «про запас» или возвращённые с износом 50%). Делается так же, как заказ:</div></div>
+
+<ol class="steps">
+<li><b>«Выдача»</b> → <b>«Сотрудник»</b> (1) — кому выдаёте.</li>
+<li><b>«Номенклатура»</b> (2) — что выдаёте.</li>
+<li><b>«Сохранить»</b> (3) — распечатается чек.</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame menu" src="images/menu_vydacha.png"/><img alt="" class="frame" src="images/s7_1.png"/><figcaption>«Выдача» → Сотрудник (1) → Номенклатура (2) → Сохранить (3)</figcaption></figure>
+<div class="keep sec"><h3 id="s6">6. Инвентаризация</h3></div>
+<ol class="steps">
+<li><b>«Инвентаризация»</b> → <b>«Сотрудник»</b> — появится список формы, которая на нём числится.</li>
+<li>Сверьте «Учётное количество» с тем, что есть на самом деле.</li>
+<li>Выделите строку → <b>«Количество»</b> → введите фактическое количество на калькуляторе → «ОК».</li>
+<li><b>«Сохранить»</b> — распечатается чек.</li>
+</ol>
+<figure class="figure2 three phone"><img alt="" class="frame menu" src="images/menu_inv.png"/><img alt="" class="frame" src="images/s8_1.png"/><img alt="" class="frame" src="images/s8_3.png"/><figcaption>«Инвентаризация» → Учётное / Факт. количество → «Количество»</figcaption></figure>
+<div class="keep sec"><h3 id="s7">7. Возврат СО на РЦ</h3></div>
+<div class="stop"><b>ТОЛЬКО 5 ДНЕЙ С ПРИЁМКИ</b><br/>Вернуть на РЦ можно форму, пришедшую <u>не по заказу</u> (заказали один размер — привезли другой и т.п.). После 5 дней возврат не оформить.</div>
+<ol class="steps">
+<li><b>«Возврат СО на РЦ»</b> → <b>«Сотрудник»</b> (1).</li>
+<li><b>«Номенклатура»</b> (2) — что возвращаете.</li>
+<li>Проверьте количество; если нужно — кнопка <b>«Количество»</b> (3).</li>
+<li><b>«Сохранить»</b> (4) — распечатается чек.</li>
+</ol>
+<figure class="figure2 phone"><img alt="" class="frame menu" src="images/menu_rc.png"/><img alt="" class="frame" src="images/s9_1.png"/><figcaption>«Возврат СО на РЦ» → 1–4</figcaption></figure>
+<div class="keep sec"><h3 id="s8">Короткий чек-лист для открытия</h3></div>
+<ol class="steps">
+<li>В день заказа размена, печати и доверенности — заявка в ЯК на доступ к кассе себе; продавцам — напомнить сделать то же. За день до приёмки — проверить, что доступ есть.</li>
+<li>Проверить, что на кассу прогружены права старшего продавца и дни трудоустройства сотрудников.</li>
+<li>Собрать размеры у всех сотрудников магазина.</li>
+<li>Как только доступ к кассе получен — заказать форму с кассы, вместе с командой открытия или самому.</li>
+<li>Заказать: по одному сотруднику за акт, продавцу — 1 комплект, себе — до 3.</li>
+<li>При приёмке проверить размеры; ошибки — «Возврат СО на РЦ» в течение 5 дней.</li>
+<li>При увольнении — «Возврат» в течение двух недель.</li>
+</ol>
+
+      </div></main>
+      <aside class="side" aria-label="Навигация">
+        <div class="panel" id="desktopToc">
+          <div class="head"><div class="h">Оглавление</div>
+            <button class="iconbtn" type="button" id="collapseToc" aria-label="Свернуть/развернуть оглавление" style="width:40px;height:40px;border-radius:14px;"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+          </div>
+          <div class="body" id="tocBody"><ul class="toclist" id="tocList"></ul></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <button class="totop" id="toTop" type="button" aria-label="Наверх"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M6 11l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+  <div class="lb" id="lightbox" aria-hidden="true"><div class="wrap"><img id="lbImg" alt=""><div class="cap" id="lbCap"></div></div></div>
+  <script>
+    function LSg(k){try{return localStorage.getItem(k)}catch(e){return null}}
+    function LSs(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+
+    (function(){
+      const root = document.documentElement;
+      const storageKey = "ya_forma_theme";
+      const btnTheme = document.getElementById("toggleTheme");
+      const btnCopy = document.getElementById("copyLink");
+      const progress = document.getElementById("progressbar");
+      const toTop = document.getElementById("toTop");
+      const tocList = document.getElementById("tocList");
+      const tocBody = document.getElementById("tocBody");
+      const collapseBtn = document.getElementById("collapseToc");
+      const mobileTocHost = document.getElementById("mobileToc");
+
+      // Optional theme override using simple invert of prefers. We'll simulate by toggling a class and adjusting tokens.
+      const setMode = (mode) => {
+        // mode: "light" | "dark" | "auto"
+        root.setAttribute("data-mode", mode);
+        LSs(storageKey, mode);
+        // Apply token overrides:
+        const styleId = "mode-overrides";
+        let st = document.getElementById(styleId);
+        if(!st){ st = document.createElement("style"); st.id = styleId; document.head.appendChild(st); }
+        if(mode === "auto"){ st.textContent = ""; return; }
+        if(mode === "dark"){
+          st.textContent = `
+            :root{
+              --bg0:#050816; --bg1:#070b1f; --bg2:#0b1230;
+              --card: rgba(255,255,255,.06);
+              --card2: rgba(255,255,255,.08);
+              --border: rgba(255,255,255,.10);
+              --text:#eaf0ff;
+              --muted: rgba(234,240,255,.70);
+              --shadow: 0 18px 60px rgba(0,0,0,.45);
+              --shadow2: 0 10px 30px rgba(0,0,0,.30);
+              --accent:#7dd3fc; --accent2:#a78bfa;
+              --good:#34d399; --warn:#fbbf24; --bad:#fb7185;
+            }`;
+        }else{
+          st.textContent = `
+            :root{
+              --bg0:#f5f7ff; --bg1:#eef2ff; --bg2:#e8ecff;
+              --card: rgba(17,24,39,.04);
+              --card2: rgba(17,24,39,.06);
+              --border: rgba(17,24,39,.10);
+              --text:#0b1020;
+              --muted: rgba(11,16,32,.65);
+              --shadow: 0 18px 60px rgba(11,16,32,.10);
+              --shadow2: 0 10px 30px rgba(11,16,32,.08);
+              --accent:#2563eb; --accent2:#7c3aed;
+              --good:#059669; --warn:#b45309; --bad:#be123c;
+            }`;
+        }
+      };
+
+      // Load saved mode
+      const saved = LSg(storageKey) || "auto";
+      setMode(saved);
+
+      btnTheme.addEventListener("click", () => {
+        const cur = LSg(storageKey) || "auto";
+        const next = cur === "auto" ? "dark" : (cur === "dark" ? "light" : "auto");
+        setMode(next);
+      });
+
+      btnCopy.addEventListener("click", async () => {
+        try{
+          await navigator.clipboard.writeText(location.href);
+          btnCopy.animate([{transform:"translateY(-1px)"},{transform:"translateY(0px)"}],{duration:180});
+        }catch(e){}
+      });
+
+      // Build TOC from headings (h3/h4) – no new visible text beyond "Оглавление"
+      const headings = [...document.querySelectorAll("main.paper h3[id], main.paper h4[id]")];
+      const makeLink = (h) => {
+        const a = document.createElement("a");
+        a.href = "#" + h.id;
+        a.textContent = h.textContent.trim();
+        a.dataset.level = h.tagName === "H4" ? "4" : "3";
+        return a;
+      };
+
+      const ul = tocList;
+      headings.forEach(h => {
+        const li = document.createElement("li");
+        li.appendChild(makeLink(h));
+        ul.appendChild(li);
+      });
+
+      // Mobile TOC
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.innerHTML = `<span>Оглавление</span><span class="chev" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>`;
+      const body = document.createElement("div");
+      body.className = "body";
+      const ul2 = document.createElement("ul");
+      ul2.className = "toclist";
+      headings.forEach(h => {
+        const li = document.createElement("li");
+        const a = makeLink(h);
+        a.dataset.level = h.tagName === "H4" ? "4" : "3";
+        li.appendChild(a);
+        ul2.appendChild(li);
+      });
+      body.appendChild(ul2);
+      details.appendChild(summary);
+      details.appendChild(body);
+      mobileTocHost.innerHTML = '';
+      mobileTocHost.appendChild(details);
+
+      // Active heading highlighting
+      const observer = new IntersectionObserver((entries)=>{
+        entries.forEach(e=>{
+          const id = e.target.id;
+          // For mobile: multiple links with same href; highlight all
+          document.querySelectorAll(`a[href="#${CSS.escape(id)}"]`).forEach(a => {
+            if(e.isIntersecting) a.classList.add("is-active");
+            else a.classList.remove("is-active");
+          });
+        });
+      }, { rootMargin: "-40% 0px -55% 0px", threshold: 0.01 });
+
+      headings.forEach(h => observer.observe(h));
+
+      // Collapse TOC body
+      let collapsed = false;
+      collapseBtn.addEventListener("click", ()=>{
+        collapsed = !collapsed;
+        tocBody.style.display = collapsed ? "none" : "block";
+      });
+
+      // Reading progress + toTop
+      const onScroll = ()=>{
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        const p = max > 0 ? (doc.scrollTop / max) * 100 : 0;
+        progress.style.width = p.toFixed(2) + "%";
+        if(doc.scrollTop > 600) toTop.classList.add("show");
+        else toTop.classList.remove("show");
+      };
+      window.addEventListener("scroll", onScroll, {passive:true});
+      onScroll();
+
+      toTop.addEventListener("click", ()=> window.scrollTo({top:0, behavior:"smooth"}));
+
+      // Image lightbox (no text changes)
+      const lb = document.getElementById("lightbox");
+      const lbImg = document.getElementById("lbImg");
+      const lbCap = document.getElementById("lbCap");
+      document.querySelectorAll("figure.figure img, figure.figure2 img").forEach(img=>{
+        img.addEventListener("click", ()=>{
+          lbImg.src = img.currentSrc || img.src;
+          const cap = img.closest("figure")?.querySelector("figcaption")?.textContent?.trim() || "";
+          lbCap.textContent = cap;
+          lb.classList.add("show");
+          lb.setAttribute("aria-hidden", "false");
+        });
+      });
+      const closeLb = ()=>{
+        lb.classList.remove("show");
+        lb.setAttribute("aria-hidden", "true");
+        lbImg.removeAttribute("src");
+      };
+      lb.addEventListener("click", closeLb);
+      window.addEventListener("keydown", (e)=>{ if(e.key==="Escape") closeLb(); });
+    })();
+  </script>
+</body></html>

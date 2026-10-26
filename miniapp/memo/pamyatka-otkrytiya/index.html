@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Не забывай — памятка открытия</title>
+<style>
+/* Layout: phone-first app screen — object strip, region switch, numbered memo cards that expand */
+:root{
+  --bg:#f2f3f5; --card:#fff; --line:#e3e5e9; --fg:#16181d; --muted:#5b616e;
+  --accent:#2563eb; --accent-soft:#eff6ff; --ok:#067647; --ok-soft:#dcfae6;
+  --warn:#b54708; --warn-soft:#fef0c7; --bad:#b42318; --bad-soft:#fee4e2;
+  --font:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1218;--card:#181c24;--line:#2a303b;--fg:#e9edf3;--muted:#9aa3b2;--accent:#7aa2ff;--accent-soft:#1c2740;--ok:#4cc985;--ok-soft:#14301f;--warn:#f5b54a;--warn-soft:#3a2a10;--bad:#ff7b6b;--bad-soft:#3a1714;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-left)) 60px;display:flex;flex-direction:column;gap:12px}
+header.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:12px max(16px,env(safe-area-inset-left))}
+.top .in{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+h1{margin:0;font-size:22px;font-weight:800;text-wrap:balance}
+.obj{font-size:13px;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.seg{display:inline-grid;grid-auto-flow:column;background:var(--bg);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;border-radius:8px;background:transparent;color:var(--muted);font:600 13px var(--font);padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.bar{height:6px;border-radius:3px;background:var(--line)}.bar i{display:block;height:6px;border-radius:3px;background:var(--accent);width:0}
+.prog{font-size:13px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.group{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:10px 2px 0}
+details.item{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+details.item[data-done="1"]{border-color:color-mix(in oklab,var(--ok) 45%,var(--line))}
+summary{list-style:none;display:flex;gap:12px;align-items:center;padding:12px 14px;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+.num{width:30px;height:30px;border-radius:15px;background:var(--accent-soft);color:var(--accent);font-weight:800;font-size:13px;display:grid;place-items:center;flex:none;font-variant-numeric:tabular-nums}
+details[data-done="1"] .num{background:var(--ok);color:#fff}
+.st{flex:1;min-width:0;display:flex;flex-direction:column}
+.st b{font-size:15.5px}.st span{font-size:12.5px;color:var(--muted)}
+.chev{flex:none;color:var(--muted);transition:transform .15s}details[open] .chev{transform:rotate(180deg)}
+.body{padding:0 14px 14px 56px;display:flex;flex-direction:column;gap:10px}
+@media(max-width:520px){.body{padding-left:14px}}
+.body ol,.body ul{margin:0;padding-left:20px}.body li{margin:4px 0}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 14px;border-radius:11px;font-weight:600;font-size:14px;text-decoration:none;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;font-family:var(--font)}
+.btn.main{background:var(--accent);color:#fff}
+.btn.ext::after{content:"↗";font-size:12px;opacity:.7}
+.btn.pdf::before{content:"PDF";font-size:10.5px;font-weight:800;background:var(--bad-soft);color:var(--bad);border-radius:5px;padding:1px 5px}
+.note{border-radius:12px;padding:10px 12px;font-size:14px;background:var(--accent-soft)}
+.note.warn{background:var(--warn-soft)}.note.bad{background:var(--bad-soft);border:1.5px solid var(--bad)}
+.note.bad b:first-child{color:var(--bad)}
+.who{display:grid;grid-template-columns:1fr;gap:6px}
+.p{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:14px;padding:8px 10px;border-radius:10px;background:var(--bg)}
+.p b{font-weight:700}.p .c{font-family:var(--mono);font-size:13px;user-select:all}
+.done{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;cursor:pointer;align-self:flex-start;padding:6px 0}
+.done input{width:22px;height:22px;accent-color:var(--ok)}
+pre.tpl{margin:0;white-space:pre-wrap;font:13px/1.5 var(--mono);background:var(--bg);border-radius:10px;padding:10px 12px}
+.calc{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.calc input{font:600 15px var(--mono);padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);width:170px}
+.calc output{font:700 16px var(--mono);color:var(--accent)}
+[data-reg]{display:none}
+body[data-region="sfo"] [data-reg~="sfo"],body[data-region="ufo"] [data-reg~="ufo"],body[data-region="cfo"] [data-reg~="cfo"]{display:revert}
+.hide{display:none!important}
+.foot{font-size:12.5px;color:var(--muted);text-align:center;margin-top:10px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body data-region="sfo">
+<header class="top"><div class="in">
+  <div class="row"><h1>Не забывай</h1><span class="prog" id="prog">0 из 19</span></div>
+  <div class="obj">Пример объекта: ПР22 · г. Пермь, Комсомольский пр-т, 36 — в приложении подставится ваш</div>
+  <div class="bar"><i id="barI"></i></div>
+  <div class="row">
+    <div class="seg" role="group" aria-label="Округ">
+      <button type="button" data-r="sfo" aria-pressed="true">СФО</button>
+      <button type="button" data-r="ufo" aria-pressed="false">УФО</button>
+      <button type="button" data-r="cfo" aria-pressed="false">ЦФО</button>
+    </div>
+    <a class="btn" href="files/kontakty-otkrytie.vcf" download>Контакты .vcf</a>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+<div class="group">Заранее, до приёмки</div>
+
+<details class="item" data-id="1"><summary><span class="num">1</span><span class="st"><b>Заказать размен</b><span>в ближайшем действующем магазине</span></span><span class="chev">▾</span></summary><div class="body">
+  <ol><li>Посчитайте от даты открытия, когда в ближайший магазин приходит последний размен, — свяжитесь с его директором.</li>
+  <li>Проведите размен по файлу «Рабочие процессы».</li>
+  <li>Дни инкассации и размена для нового магазина — у Елены Бадеевой.</li>
+  <li>Все передачи денег — через ЯК, день в день.</li></ol>
+  <div class="note warn"><b>В тот же день:</b> заявка в ЯК на доступ к кассе — себе и продавцам. Без доступа нельзя заказать форму, пробить чек и распечатать документы на приём. За день до приёмки проверьте, что доступ есть.</div>
+  <div class="who"><div class="p"><b>Елена Бадеева</b><span class="c">e.badeeva@ya-retail.ru</span><span>тема: «График Инкассации и Размена. Новое ОСП»</span></div></div>
+  <div class="btns"><a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/78MlTxyh0H-GUw">«Рабочие процессы»</a><a class="btn" href="mailto:e.badeeva@ya-retail.ru?subject=График%20Инкассации%20и%20Размена.%20Новое%20ОСП">Написать Бадеевой</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="2"><summary><span class="num">2</span><span class="st"><b>Заказать печать и доверенность</b><span>в «Ярче Коммуникациях»</span></span><span class="chev">▾</span></summary><div class="body">
+  <ol><li>ЯК → Помощь → Создать → Юридическое сопровождение → <b>Заявка на доверенность</b>.</li>
+  <li>ФИО управляющего магазином, дата вступления в должность (= начало действия доверенности), комментарий при необходимости.</li>
+  <li>Печать — так же, отдельной заявкой.</li></ol>
+  <div class="who"><div class="p"><b>Ольга Павловская</b><span>вопросы по печати и доверенности</span><span class="c">o.pavlovskaya@ya-retail.ru</span></div></div>
+  <div class="btns"><a class="btn" href="mailto:o.pavlovskaya@ya-retail.ru?subject=Заявка%20на%20доверенность%20и%20печать.%20Новый%20магазин%20и%20УМ">Написать Павловской</a><a class="btn" href="instr/yk/index.html">Инструкция ЯК</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="3"><summary><span class="num">3</span><span class="st"><b>Распечатать документы для приёмки</b><span>чек-лист, памятки, план категорий</span></span><span class="chev">▾</span></summary><div class="body">
+  <ul><li>Папка «Материалы к открытию».</li><li>Файл «Чек-лист» — <b>все вкладки</b>.</li><li>Памятки «Приёмка стройки», «Приёмка оборудования», «Нормы ТЗ».</li><li>План категорий из Кайтена — можно обрезать и напечатать крупнее (Xodo для Android).</li></ul>
+  <div class="btns">
+    <a class="btn ext" target="_blank" href="https://drive.google.com/drive/folders/1-bjtpjArUtkFnejHKAXVOd5pgZwxKM79">Материалы к открытию</a>
+    <a class="btn ext" target="_blank" href="https://drive.google.com/file/d/1pCb3rrncQdbjXEtVnhb-_cLtX38OcCCx/view">Чек-лист</a>
+    <a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/rcvAqTQi07Ad8g">Приёмка стройки</a>
+    <a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/30izgDM44t6q5Q">Приёмка оборудования</a>
+    <a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/j0FbNbNxccPQyw">Нормы ТЗ</a>
+    <a class="btn ext" target="_blank" href="https://disk.yandex.ru/d/R65mUoQN45ZWqQ">Xodo</a>
+    <a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/7bo2FaBBsbrVPg">Как обрезать PDF</a>
+  </div>
+  <div class="note">В приложении — одна кнопка «На печать»: бот присылает файл, дальше «Поделиться» → Kyocera.</div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<div class="group">День приёмки</div>
+
+<details class="item" data-id="4"><summary><span class="num">4</span><span class="st"><b>Группа в WhatsApp</b><span>накануне или в день приёмки</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="calc"><span>Название:</span><pre class="tpl" id="grpName">ПР22 Комсомольский 36</pre><button class="btn" type="button" data-copy="grpName">Скопировать</button></div>
+  <div>Участники: все из списка ниже, команда открытия, директор магазина, сотрудники магазина (по желанию).</div>
+  <div class="who">
+    <div class="p"><b>Елена Тарасова</b><span class="c">8-953-916-83-52</span></div>
+    <div class="p"><b>Екатерина Ларионова</b><span class="c">8-923-423-38-28</span></div>
+    <div class="p"><b>Анастасия Жихарева</b><span class="c">8-961-888-00-55</span></div>
+    <div class="p"><b>Екатерина Суркова</b><span class="c">8-913-481-15-79</span></div>
+    <div class="p"><b>Владимир Ильиных</b><span class="c">8-913-920-49-73</span></div>
+    <div class="p"><b>Ксения Тимофеева</b><span class="c">8-913-880-68-29</span></div>
+    <div class="p"><b>Сергей Слёзкин</b><span class="c">8-923-401-45-92</span></div>
+    <div class="p"><b>Анастасия Черепанова</b><span class="c">8-913-810-11-43</span></div>
+    <div class="p"><b>Валерия Кускова</b><span class="c">8-913-105-00-38</span></div>
+    <div class="p"><b>Анастасия Филатова</b><span class="c">8-903-950-66-33</span></div>
+    <div class="p"><b>РКО</b><span>по объекту</span></div>
+  </div>
+  <div class="btns"><a class="btn ext" target="_blank" href="https://docs.google.com/document/d/10IFk7um3uYS9ewOXkoQqKkI6MpnykblaUd0LUyvt1FA/edit">Список в документе</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="5"><summary><span class="num">5</span><span class="st"><b>Письмо в день приёмки</b><span>до 14:00 (ЦФО — по Москве)</span></span><span class="chev">▾</span></summary><div class="body">
+  <div>В приложении письмо собирается из обхода по блокам: замечания с фото, сроками и ответственными, недовозы по нормам, блок статусов. Пока — по шаблону.</div>
+  <div class="btns"><a class="btn ext" target="_blank" href="https://docs.google.com/document/d/1Rxt41nPRF9M50mee8bt3NOMXt4SxTaXj/edit">Шаблон письма</a></div>
+  <div data-reg="cfo" class="note"><b>Для Москвы:</b> письмо о первом чеке — Елене Сергеевой (e.sergeeva@ya-retail.ru), тема «&lt;код&gt; Первый Чек».
+    <pre class="tpl">Добрый день!
+Информация по первым пробитым чекам:
+ККМ 1: дата, время чека
+ККМ 2: дата, время чека
+ККМ 3: дата, время чека
+Фото/сканы чеков — во вложении</pre></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="6"><summary><span class="num">6</span><span class="st"><b>Outlook директору</b><span>приложение и подпись</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="btns"><a class="btn ext" target="_blank" href="https://go.microsoft.com/fwlink/?linkid=2229766">Установить Outlook</a></div>
+  <div>Подпись (в приложении — из данных объекта):</div>
+  <pre class="tpl" id="sign">С уважением,
+Фамилия Имя Отчество
+УПРАВЛЯЮЩИЙ МАГАЗИНОМ
+ОСП ПЕРМЬ МАГАЗИН №ПР22
+ООО "КАМЕЛОТ-А"
+ТЕЛ.: +7XXXXXXXXXX
+E-MAIL: [почта магазина]</pre>
+  <div class="btns"><button class="btn" type="button" data-copy="sign">Скопировать подпись</button></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="7"><summary><span class="num">7</span><span class="st"><b>Kyocera Mobile Print</b><span>печать с телефона</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="btns"><a class="btn ext" target="_blank" href="https://play.google.com/store/apps/details?id=com.kyocera.kyoprint">Android — Google Play</a><a class="btn ext" target="_blank" href="https://disk.yandex.ru/d/NbRBbQOiperOfw">Android — файл установки</a></div>
+  <div class="note warn"><b>iPhone:</b> перед установкой позвоните — подскажу, как поставить.</div>
+  <div class="btns"><a class="btn main" href="tel:89234112728">Позвонить 8-923-411-27-28</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="8"><summary><span class="num">8</span><span class="st"><b>Подключить принтер</b><span>IP-адрес без пробных распечаток</span></span><span class="chev">▾</span></summary><div class="body">
+  <ol><li>Настройки телефона → Wi-Fi → сеть «yarche_guest» → свойства → IP-адрес.</li><li>Замените число после третьей точки на <b>20</b> — это адрес принтера.</li></ol>
+  <div class="calc"><label for="ipIn">IP телефона</label><input id="ipIn" value="10.100.100.01" inputmode="decimal"><span>→ принтер:</span><output id="ipOut">10.100.100.20</output></div>
+  <div class="btns"><a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/7qXD6cPw-sJ8ng">Инструкция по подключению</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<div class="group">Приложения и доступы</div>
+
+<details class="item" data-id="9"><summary><span class="num">9</span><span class="st"><b>Мобильные кадры</b><span>TestFlight на iPhone, установка на Android</span></span><span class="chev">▾</span></summary><div class="body">
+  <div>Для входа: ИНН управляющего, логин придумывается при первом входе.</div>
+  <div class="btns"><a class="btn main" href="instr/mk/mk-ios.html">Инструкция iPhone</a><a class="btn" href="instr/mk/mk-android.html">Инструкция Android</a><a class="btn pdf" href="instr/mk/mk-ustanovka-iphone.pdf">iPhone</a><a class="btn pdf" href="instr/mk/mk-ustanovka-android.pdf">Android</a><a class="btn pdf" href="../pamyatka-originaly-1/mobilnye-kadry-instrukciya-19.06.2025.pdf">Оригинал от 19.06.2025</a></div>
+  <div class="who"><div class="p"><b>Владилен Андреев</b><span>доступы, роли, вход</span><span class="c">8-913-840-05-49</span><span class="c">v.andreev@kdvm.ru</span></div></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="10"><summary><span class="num">10</span><span class="st"><b>Ярче Коммуникации</b><span>RuStore / App Store, вход через кассу</span></span><span class="chev">▾</span></summary><div class="body">
+  <div>Нужно: быть трудоустроенным, ввести номер телефона, считать QR-код с кассы под своей картой.</div>
+  <div class="btns"><a class="btn main" href="instr/yk/index.html">Инструкция iPhone</a><a class="btn" href="instr/yk/yk-android.html">Инструкция Android</a><a class="btn pdf" href="instr/yk/yk-ustanovka-iphone.pdf">iPhone</a><a class="btn pdf" href="instr/yk/yk-ustanovka-android.pdf">Android</a><a class="btn pdf" href="../pamyatka-originaly-1/yarche-kommunikacii-instrukciya-11.08.2026.pdf">Оригинал от 11.08.2026</a></div>
+  <div class="who"><div class="p"><b>Карина Эшмурзаева</b><span>доступы, вход</span><span class="c">8-923-405-26-86</span><span class="c">k.eshmurzaeva@kdvm.ru</span></div></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="11"><summary><span class="num">11</span><span class="st"><b>Доступ к ЛМК-Контроль</b><span>логин и пароль приходят на почту</span></span><span class="chev">▾</span></summary><div class="body">
+  <ul><li>Доступ обычно приходит сам после приказа о назначении — проверьте почту.</li><li>Первый шаг — карточка сотрудника, затем направления (приоритет — ЭЛМК).</li><li>Переводы сотрудников для трудоустройства — через директора, выдавшего направления.</li></ul>
+  <div class="btns"><a class="btn main" href="instr/lmk/lmk-mobile.html">Инструкция (телефон)</a><a class="btn" href="instr/lmk/lmk.html">Инструкция (компьютер)</a><a class="btn pdf" href="instr/lmk/lmk-mobile.pdf">Телефон</a><a class="btn pdf" href="instr/lmk/lmk-instrukciya.pdf">Компьютер</a></div>
+  <div class="who"><div class="p"><b>Нет доступа</b><span class="c">support@hbis.one</span><span>копия</span><span class="c">av.pavlova@ya-retail.ru</span></div><div class="p"><b>Ангелина Павлова</b><span>охрана труда, ЛМК/ЭЛМК</span><span class="c">8-983-342-11-42</span></div></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="12"><summary><span class="num">12</span><span class="st"><b>Журналы по охране труда</b><span>запрос в ЛМК-Контроль</span></span><span class="chev">▾</span></summary><div class="body">
+  <ol><li>Боковое меню → Документы → Запрос журналов → Создать → «+».</li><li>Добавить: журнал вводного инструктажа, журнал инструктажа на рабочем месте, журнал по электробезопасности.</li><li>«В работу».</li></ol>
+  <div class="btns"><a class="btn" href="instr/lmk/lmk-mobile.html#s10">Раздел «Запрос журналов»</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<div class="group">Персонал и хозяйство</div>
+
+<details class="item" data-id="13"><summary><span class="num">13</span><span class="st"><b>Форма сотрудникам</b><span>на следующий день после трудоустройства</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="note warn">Сначала доступ к кассе (п. 1), потом форма. Помогает команда открытия.</div>
+  <div class="btns"><a class="btn main" href="instr/forma/forma.html">Инструкция</a><a class="btn pdf" href="instr/forma/specodezhda.pdf">Спецодежда</a><a class="btn" href="instr/priem/priem.html">Приём на работу</a><a class="btn pdf" href="instr/priem/blanki-s-obrazcami.pdf">Бланки с образцами</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="14"><summary><span class="num">14</span><span class="st"><b>Договоры объекта</b><span>аренда, ТКО, дезинфекция, ОПС</span></span><span class="chev">▾</span></summary><div class="body">
+  <div>Нужны 4 договора (или доп. соглашения <b>с адресом магазина</b>). В приложении — 4 места: пришёл ✅ / нет файла 🔴 и кнопка «Запросить у …» только недостающих.</div>
+  <div data-reg="sfo ufo" class="who"><div class="p"><b>Все четыре</b><span>менеджер по развитию региона (выбирается для объекта)</span></div><div class="p"><b>Пермь</b><span>Шаврин Алексей</span><span class="c">a.shavrin@ya-retail.ru</span></div><div class="p"><b>Красноярск</b><span>Чурай Ольга</span><span class="c">8-908-223-30-65</span></div></div>
+  <div data-reg="cfo" class="who"><div class="p"><b>Аренда</b><span>территориальный менеджер</span></div><div class="p"><b>ТКО, дезинфекция</b><span>Никитин Егор</span><span class="c">e.nikitin@ya-retail.ru</span></div><div class="p"><b>ОПС</b><span>Мирошников Андрей</span><span class="c">a.miroshnikov@ya-retail.ru</span></div></div>
+  <pre class="tpl" id="dogTpl">Тема: ПР22 Сканы договоров
+
+&lt;Имя&gt;, добрый день!
+
+Просьба предоставить договора:
+• Договор аренды помещения
+• Договор дезинсекции/дератизации
+• Договор на ТБО/ТКО
+• Договор ОПС
+
+Заранее благодарю!</pre>
+  <div class="btns"><button class="btn" type="button" data-copy="dogTpl">Скопировать письмо</button></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="15"><summary><span class="num">15</span><span class="st"><b>Заявка АХЧ</b><span>мелкие работы перед открытием</span></span><span class="chev">▾</span></summary><div class="body">
+  <div data-reg="sfo ufo">Через «Ярче Коммуникации» → Помощь → Заявки по АХЧ → Создать.</div>
+  <div data-reg="cfo">ЦФО — в WhatsApp. Тверь/Калуга — почтой N.mazurova@vianservis.ru и e.nikitin@ya-retail.ru + узнать номер заявки у Натальи: 8-916-590-34-57 / 8-926-788-99-15.</div>
+  <div class="btns"><a class="btn main" href="instr/ahch/index.html">Собрать заявку (16 работ)</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="16" data-reg="cfo"><summary><span class="num">16</span><span class="st"><b>МОПы и ковры</b><span>только ЦФО — подрядчик</span></span><span class="chev">▾</span></summary><div class="body">
+  <div>В приложении — «+ Контакт подрядчика»: есть почта — готовое письмо; только телефон — звоним и уточняем.</div>
+  <pre class="tpl" id="mopTpl">Просьба добавить в график по замене мопов и ковров магазин ПР22, г. Пермь, Комсомольский пр-т, 36.
+Подскажите, когда будет первый заезд, чтобы мы подготовились.</pre>
+  <div class="btns"><button class="btn" type="button" data-copy="mopTpl">Скопировать</button></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="17"><summary><span class="num">17</span><span class="st"><b>Дворник</b><span>объявление, договор ГПХ, акт</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="btns"><a class="btn main" href="instr/dvornik/dvornik.html">Инструкция</a><a class="btn pdf" href="instr/dvornik/obyavlenie-dvornik-primer.pdf">Объявление</a><a class="btn pdf" href="instr/dvornik/konvert-kalko-primer.pdf">Вкладыш на конверт</a><a class="btn pdf" href="instr/dvornik/dvornik-gph.pdf">Инструкция</a></div>
+  <div class="who"><div class="p"><b>Светлана Калько</b><span>документы ГПХ</span><span class="c">8-913-880-68-35</span><span class="c">s.kalko@ya-retail.ru</span></div></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="18"><summary><span class="num">18</span><span class="st"><b>Покупюрник</b><span>90 двусторонних листов — на год</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="btns"><a class="btn main" href="instr/pokup/pokupyurnik.html">Инструкция и кассовая дисциплина</a><a class="btn pdf" href="instr/pokup/pokupyurnik-90-listov.pdf">На печать</a></div>
+  <div data-reg="sfo ufo" class="btns"><a class="btn pdf" href="../pamyatka-originaly-2/kassovaya-disciplina-sfo-ufo-01.07.2026.pdf">Кассовая дисциплина СФО/УФО</a></div>
+  <div data-reg="cfo" class="btns"><a class="btn pdf" href="../pamyatka-originaly-2/kassovaya-disciplina-cfo-02.07.2025.pdf">Кассовая дисциплина ЦФО</a></div>
+  <div class="who">
+    <div class="p" data-reg="sfo"><b>Бухгалтер по кассе</b><span>Конохова Наталья</span><span class="c">8-913-864-98-24</span><span class="c">n.konokhova@kdvm.ru</span></div>
+    <div class="p" data-reg="ufo"><b>Бухгалтер по кассе</b><span>Русакова Наталья</span><span class="c">8-912-250-19-82</span><span class="c">n.rusakova@ya-retail.ru</span></div>
+    <div class="p" data-reg="cfo"><b>Бухгалтер по кассе</b><span>Романова Мария</span><span class="c">8-916-754-57-51</span><span class="c">m.romanova@ya-retail.ru</span></div>
+  </div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<details class="item" data-id="19"><summary><span class="num">19</span><span class="st"><b>Список и содержание папок</b><span>как разложить документы</span></span><span class="chev">▾</span></summary><div class="body">
+  <div class="btns"><a class="btn ext" target="_blank" href="https://disk.yandex.ru/i/Ko0NYJUoUiuaDw">Открыть файл</a></div>
+  <label class="done"><input type="checkbox"> Сделано</label>
+</div></details>
+
+<p class="foot">Офлайн-версия для понимания. ↗ — ссылки, которым нужен интернет. Оригиналы (инструкции МК и ЯК, «Кадровое делопроизводство», кассовая дисциплина, памятка по дворнику) лежат в папках «pamyatka-originaly-1» и «-2» — распакуйте их рядом с этой папкой. Отметки «Сделано» хранятся только в этом браузере.</p>
+</div>
+
+<script>
+(function(){
+  var K='nezab_v1';function g(){try{return JSON.parse(localStorage.getItem(K))||{}}catch(e){return{}}}function s(v){try{localStorage.setItem(K,JSON.stringify(v))}catch(e){}}
+  var st=g(); st.done=st.done||{};
+  function region(r){document.body.dataset.region=r;document.querySelectorAll('.seg button').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.r===r)});st.reg=r;s(st);count()}
+  document.querySelectorAll('.seg button').forEach(function(b){b.onclick=function(){region(b.dataset.r)}});
+  function count(){var items=[].filter.call(document.querySelectorAll('details.item'),function(d){return getComputedStyle(d).display!=='none'});var n=items.filter(function(d){return d.dataset.done==='1'}).length;document.getElementById('prog').textContent=n+' из '+items.length;document.getElementById('barI').style.width=(items.length?n/items.length*100:0)+'%'}
+  document.querySelectorAll('details.item').forEach(function(d){var id=d.dataset.id,cb=d.querySelector('.done input');if(st.done[id]){cb.checked=true;d.dataset.done='1'}cb.onchange=function(){d.dataset.done=cb.checked?'1':'0';st.done[id]=cb.checked;s(st);count()}});
+  document.querySelectorAll('[data-copy]').forEach(function(b){b.onclick=function(){var t=document.getElementById(b.dataset.copy).textContent,o=b.textContent;function ok(){b.textContent='Скопировано';setTimeout(function(){b.textContent=o},1500)}if(navigator.clipboard){navigator.clipboard.writeText(t).then(ok,function(){})}}});
+  var ip=document.getElementById('ipIn'),out=document.getElementById('ipOut');ip.oninput=function(){var p=ip.value.trim().split('.');out.textContent=p.length===4?p.slice(0,3).join('.')+'.20':'—'};
+  region(st.reg||'sfo');
+})();
+</script>
+</body>
+</html>

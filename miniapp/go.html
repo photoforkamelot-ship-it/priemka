@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Открываю…</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,-apple-system,sans-serif;background:#f2f3f5;color:#16181d;display:grid;place-items:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}
+a{display:inline-flex;min-height:52px;align-items:center;justify-content:center;padding:0 24px;border-radius:14px;background:#2563eb;color:#fff;font-weight:600;text-decoration:none;margin-top:16px}
+p{color:#5b616e;font-size:14px}
+</style>
+</head>
+<body>
+<div>
+  <b id="t">Открываю почту…</b>
+  <div><a id="go" href="#">Открыть</a></div>
+  <p>Если ничего не произошло — нажмите кнопку. Потом это окно можно закрыть.</p>
+</div>
+<script>
+// Переходник для Telegram: из Mini App ссылки mailto:/tel: открываются через браузер.
+(function () {
+  var u = decodeURIComponent(location.hash.slice(1));
+  if (!/^(mailto|tel):/i.test(u)) { document.getElementById("t").textContent = "Неверная ссылка"; return; }
+  if (/^tel:/i.test(u)) document.getElementById("t").textContent = "Звоню…";
+  document.getElementById("go").href = u;
+  location.href = u;
+})();
+</script>
+</body>
+</html>

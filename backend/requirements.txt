@@ -1,0 +1,4 @@
+pymupdf==1.26.7
+pytrovich>=0.0.2
+requests>=2.31
+openpyxl>=3.1

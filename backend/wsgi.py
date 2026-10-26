@@ -23,7 +23,7 @@ REASONS = {200: "OK", 400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
 
 def application(environ, start_response):
     method = environ.get("REQUEST_METHOD", "GET")
-    path = environ.get("PATH_INFO", "/")
+    path = environ.get("PATH_INFO", "/").encode("latin-1", "replace").decode("utf-8", "replace")  # PEP 3333
     headers = {k[5:].replace("_", "-").title(): v for k, v in environ.items() if k.startswith("HTTP_")}
     if environ.get("CONTENT_TYPE"):
         headers["Content-Type"] = environ["CONTENT_TYPE"]

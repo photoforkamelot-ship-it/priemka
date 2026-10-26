@@ -32,6 +32,19 @@ def _pdf(data: bytes, name: str) -> Response:
     return 200, {"Content-Type": "application/pdf", "Content-Disposition": f'inline; filename="{name}"'}, data
 
 
+_STORES: dict | None = None
+
+
+def _stores() -> dict:
+    """Справочник магазинов (tools/import_stores.py). Лежит в backend/data/ — в git не попадает."""
+    global _STORES
+    if _STORES is None:
+        from pathlib import Path
+        f = Path(os.environ.get("STORES_FILE") or Path(__file__).resolve().parent.parent / "data" / "stores.json")
+        _STORES = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {"stores": [], "email_prefix": {}}
+    return _STORES
+
+
 class Api:
     def __init__(self, store: Store, bot_token: str, dev_user: TgUser | None = None, sender=None, disk=None):
         self.store, self.bot_token, self.dev_user, self.disk = store, bot_token, dev_user, disk
@@ -83,6 +96,8 @@ class Api:
             (o + r"/contracts/request", "POST", self.contracts_request),
             (o + r"/contracts/upload", "POST", self.contracts_upload),
             (o + r"/texts", "GET", self.get_texts),
+            (r"^/api/directory$", "GET", self.directory),
+            (r"^/api/store/([^/]+)$", "GET", self.store_hint),
             (o + r"/pdf/(konvert|dvornik)", "GET", self.get_pdf),
             (o + r"/print/(konvert|dvornik|vcf)", "POST", self.send_to_chat),
             (o + r"/vcf", "GET", self.get_vcf),
@@ -101,10 +116,11 @@ class Api:
     def list_objects(self, u, *_):
         out = []
         for o in self.store.list_for(u.id):
-            steps = firstday.first_day(o)
-            out.append({"id": o.id, "code": o.code, "address": o.full_address, "okrug": o.okrug,
-                        "accept_date": o.accept_date, "open_date": o.open_date,
-                        "firstday_done": sum(s.state == "done" for s in steps), "firstday_total": len(steps),
+            keys = firstday.memo_keys(o)
+            out.append({"id": o.id, "code": o.code, "city": o.city, "address": o.address, "full_address": o.full_address,
+                        "okrug": o.okrug, "accept_date": o.accept_date, "open_date": o.open_date,
+                        "firstday_done": sum(bool(o.first_day_done.get(k)) for k in keys), "firstday_total": len(keys),
+                        "remarks_open": sum(r.status in ("open", "fixed") for r in o.remarks),
                         "missing_people": len(o.missing_people()), "missing_contracts": len(o.missing_contracts())})
         return _json(sorted(out, key=lambda x: str(x["accept_date"] or "9999")))
 
@@ -168,6 +184,56 @@ class Api:
         if data.get("tver_kaluga"):
             ch = dict(texts.AHCH_TVER_KALUGA, subject=texts.ahch_mail_subject(o))
         return _json({"text": texts.ahch_request(o, items, visit), "channel": ch, "defaults": texts.AHCH_DEFAULT})
+
+    def directory(self, u, *_):
+        """Справочник для подсказок в полях: контакты команды + люди из прошлых объектов пользователя."""
+        from .generators.vcf import CONTACTS
+        out, seen = [], set()
+        for c in json.loads(CONTACTS.read_text(encoding="utf-8")):
+            out.append({"name": c["fio"], "phone": (c.get("phones") or [""])[0], "email": c.get("email", ""),
+                        "role": c.get("role", ""), "area": c.get("area", ""), "scope": c.get("scope", "")})
+            seen.add(c["fio"])
+        cities = set()
+        for o in self.store.list_for(u.id):
+            if o.city:
+                cities.add(o.city)
+            for k, title in (("director", "Директор магазина"), ("coordinator", "Координатор строительства"),
+                             ("dev_manager", "Менеджер по развитию"), ("mops_contractor", "Подрядчик МОПы")):
+                p = getattr(o, k)
+                if p.name and p.name not in seen:
+                    seen.add(p.name)
+                    out.append({"name": p.name, "phone": p.phone, "email": p.email, "role": title,
+                                "area": o.city, "scope": "mine", "slot": k})
+        for st in _stores()["stores"]:
+            if st["director"] and st["director"] not in seen:
+                seen.add(st["director"])
+                out.append({"name": st["director"], "phone": st["director_phone"], "email": "", "role": f"Управляющий {st['code']}",
+                            "area": st["city"], "scope": "store"})
+        return _json({"people": out, "cities": sorted(cities | {x["city"] for x in _stores()["stores"] if x["city"]})})
+
+    def store_hint(self, u, _d, _b, code):
+        """Подсказка по коду магазина: из справочника магазинов или по похожим кодам (округ, город, почта)."""
+        from urllib.parse import unquote
+        code = unquote(code).strip().upper()
+        data = _stores()
+        hit = next((x for x in data["stores"] if x["code"] == code), None)
+        if hit:
+            return _json({"found": True, **hit})
+        m = re.match(r"^([А-ЯЁA-Z]+)(\d+)", code)
+        if not m:
+            return _json({"found": False})
+        pre, num = m.groups()
+        same = [x for x in data["stores"] if re.match(rf"^{pre}\d", x["code"])]
+        out = {"found": False}
+        if same:
+            from collections import Counter
+            out["okrug"] = Counter(x["okrug"] for x in same).most_common(1)[0][0]
+            cities = Counter(x["city"] for x in same if x["city"])
+            if cities:
+                out["city"] = cities.most_common(1)[0][0]
+        if pre in data["email_prefix"]:
+            out["email"] = f"{data['email_prefix'][pre]}{num}@ya-retail.ru"
+        return _json(out)
 
     def get_texts(self, u, _d, _b, oid):
         o = self._obj(oid, u)

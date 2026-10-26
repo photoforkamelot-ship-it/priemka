@@ -18,6 +18,13 @@ class Step:
     hidden: bool = False
 
 
+MEMO_ITEMS = 19          # пункты памятки «Не забывай» = вкладка «Подготовка»; ключи m1…m19
+
+
+def memo_keys(obj: StoreObject) -> list[str]:
+    return [f"m{i}" for i in range(1, MEMO_ITEMS + 1) if i != 16 or obj.okrug == "ЦФО"]
+
+
 def first_day(obj: StoreObject) -> list[Step]:
     done = obj.first_day_done
     missing = obj.missing_contracts()
