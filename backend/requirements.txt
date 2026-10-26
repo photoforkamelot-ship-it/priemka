@@ -1,0 +1,4 @@
+pymupdf>=1.24
+pytrovich>=0.0.2
+ydb>=3.0
+requests>=2.31
