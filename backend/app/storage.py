@@ -73,7 +73,10 @@ class SqliteStore:
         self.path = str(path)
         self._lock = threading.Lock()
         self._db = sqlite3.connect(self.path, check_same_thread=False)
-        self._db.execute("PRAGMA journal_mode=WAL")
+        try:  # на сетевых дисках (PythonAnywhere) WAL может быть недоступен — тогда обычный режим
+            self._db.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError:
+            pass
         self._db.execute("CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, owner INTEGER, team TEXT, data TEXT NOT NULL)")
         self._db.commit()
 
