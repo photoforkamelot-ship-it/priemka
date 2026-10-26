@@ -3,3 +3,5 @@ __pycache__/
 .env
 .pytest_cache/
 backend/dev-data.json
+backend/data/
+*.sqlite

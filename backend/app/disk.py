@@ -1,6 +1,7 @@
 """Яндекс Диск: загрузка фото замечаний и публичные ссылки на папки.
 
-Токен OAuth приложения (scope cloud_api:disk.write, cloud_api:disk.read) хранится в Lockbox.
+Токен OAuth приложения (scope cloud_api:disk.write, cloud_api:disk.read) хранится только на сервере, в файле .env (DISK_TOKEN).
+Яндекс Диск — отдельный сервис, Yandex Cloud для него не нужен.
 Папки: «Приёмка/<КОД>/<Зона>/<id замечания>_<n>.jpg».
 """
 from __future__ import annotations

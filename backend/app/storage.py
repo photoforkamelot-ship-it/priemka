@@ -1,8 +1,8 @@
 """Хранилище объектов.
 
-Объект целиком хранится одним JSON-документом. Две реализации:
+Объект целиком хранится одним JSON-документом:
 - MemoryStore / FileStore — для локальной отладки и тестов;
-- YdbStore — Yandex Database (serverless, бесплатный лимит), для облака.
+- SqliteStore — файл SQLite на сервере (рабочий режим).
 """
 from __future__ import annotations
 
@@ -65,46 +65,48 @@ class FileStore(MemoryStore):
             self.path.write_text(json.dumps(self._d, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-class YdbStore:
-    """Таблица objects(id Utf8, owner Int64, team Json, data Json, PRIMARY KEY(id))."""
+class SqliteStore:
+    """SQLite-файл на сервере: таблица objects(id, owner, team, data). Подходит для любого VPS/хостинга."""
 
-    def __init__(self, endpoint: str, database: str):
-        import ydb  # noqa: импорт только в облаке
-        import ydb.iam
-        self._ydb = ydb
-        self.driver = ydb.Driver(endpoint=endpoint, database=database,
-                                 credentials=ydb.iam.MetadataUrlCredentials())
-        self.driver.wait(fail_fast=True, timeout=10)
-        self.pool = ydb.SessionPool(self.driver)
-
-    def _q(self, query: str, params: dict):
-        def tx(session):
-            prepared = session.prepare(query)
-            return session.transaction(self._ydb.SerializableReadWrite()).execute(prepared, params, commit_tx=True)
-        return self.pool.retry_operation_sync(tx)
+    def __init__(self, path: str | os.PathLike):
+        import sqlite3
+        self.path = str(path)
+        self._lock = threading.Lock()
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        self._db.execute("PRAGMA journal_mode=WAL")
+        self._db.execute("CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, owner INTEGER, team TEXT, data TEXT NOT NULL)")
+        self._db.commit()
 
     def get(self, obj_id):
-        rs = self._q("DECLARE $id AS Utf8; SELECT data FROM objects WHERE id = $id;", {"$id": obj_id})
-        rows = rs[0].rows
-        return StoreObject.from_dict(json.loads(rows[0].data)) if rows else None
+        with self._lock:
+            row = self._db.execute("SELECT data FROM objects WHERE id = ?", (obj_id,)).fetchone()
+        return StoreObject.from_dict(json.loads(row[0])) if row else None
 
     def put(self, obj):
-        self._q("DECLARE $id AS Utf8; DECLARE $owner AS Int64; DECLARE $team AS Json; DECLARE $data AS Json;"
-                "UPSERT INTO objects (id, owner, team, data) VALUES ($id, $owner, $team, $data);",
-                {"$id": obj.id, "$owner": obj.owner_tg, "$team": json.dumps(obj.team_tg),
-                 "$data": json.dumps(obj.to_dict(), ensure_ascii=False)})
+        with self._lock:
+            self._db.execute("INSERT OR REPLACE INTO objects (id, owner, team, data) VALUES (?, ?, ?, ?)",
+                             (obj.id, obj.owner_tg, json.dumps(obj.team_tg), json.dumps(obj.to_dict(), ensure_ascii=False)))
+            self._db.commit()
 
     def all(self):
-        rs = self._q("SELECT data FROM objects;", {})
-        return [StoreObject.from_dict(json.loads(r.data)) for r in rs[0].rows]
+        with self._lock:
+            rows = self._db.execute("SELECT data FROM objects").fetchall()
+        return [StoreObject.from_dict(json.loads(r[0])) for r in rows]
 
     def list_for(self, tg_id):
         return [o for o in self.all() if o.owner_tg == tg_id or tg_id in o.team_tg]
 
+    def backup(self, dest: str | os.PathLike) -> None:
+        import sqlite3
+        with self._lock:
+            out = sqlite3.connect(str(dest))
+            self._db.backup(out)
+            out.close()
+
 
 def from_env() -> Store:
-    if os.getenv("YDB_ENDPOINT"):
-        return YdbStore(os.environ["YDB_ENDPOINT"], os.environ["YDB_DATABASE"])
+    if os.getenv("DB_FILE"):
+        return SqliteStore(os.environ["DB_FILE"])
     if os.getenv("STORE_FILE"):
         return FileStore(os.environ["STORE_FILE"])
     return MemoryStore()

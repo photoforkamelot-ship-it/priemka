@@ -1,5 +1,5 @@
 """HTTP API приложения. Без фреймворка: одна функция handle(), которую вызывают
-- Yandex Cloud Function (через API Gateway) — см. function.py;
+- рабочий сервер — см. server.py (любой VPS/хостинг с Python);
 - локальный сервер для разработки — см. devserver.py.
 """
 from __future__ import annotations
