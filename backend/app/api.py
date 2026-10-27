@@ -797,6 +797,9 @@ class Api:
 
     def create_remark(self, u, data, _b, oid):
         o = self._obj(oid, u)
+        dup = next((x for x in o.remarks if data.get("id") and x.id == data.get("id")), None)
+        if dup:   # повтор из офлайн-очереди телефона
+            return _json(asdict(dup))
         r = rm.create(o, data, u.id, u.display)
         rm.log(r, u.display, "создан пункт", "", r.text)
         self.store.put(o)
@@ -820,12 +823,15 @@ class Api:
             raise ValueError("Яндекс Диск не подключён")
         o = self._obj(oid, u)
         r = self._remark(o, rid)
+        key = data.get("key", "")
+        if key and any(p.get("key") == key for p in r.photos + r.fix_photos):
+            return _json(asdict(r))     # повтор из офлайн-очереди
         img = base64.b64decode(data["image_b64"])
         num = next((i for i, x in enumerate(o.remarks, 1) if x.id == r.id), 0)
         if data.get("kind") == "fix":
             n = len(r.fix_photos) + 1
             path = self.disk.upload(img, o.code, "Исправления до-после", f"{num:02d}_{r.zone}_{r.phrase[:40]}_после_{n}.jpg")
-            r.fix_photos.append({"path": path, "url": self.disk.public_url(path)})
+            r.fix_photos.append({"path": path, "url": self.disk.public_url(path), "key": key})
             self._thumb(o.id, r.id, "fix", n).write_bytes(img)
             if r.status == "open":
                 rm.set_status(r, "fixed", is_owner=False)
@@ -834,7 +840,7 @@ class Api:
             n = len(r.photos) + 1
             sub = f"{num:02d}_{r.phrase[:40]}"
             path = self.disk.upload(img, o.code, r.zone, f"{num:02d}_{r.zone}_{r.phrase[:40]}_{n}.jpg", sub=sub)
-            r.photos.append({"path": path, "url": self.disk.public_url(path)})
+            r.photos.append({"path": path, "url": self.disk.public_url(path), "key": key})
             if len(r.photos) > 1:
                 r.folder_url = self.disk.public_url(path.rsplit("/", 1)[0])
             self._thumb(o.id, r.id, "before", n).write_bytes(img)

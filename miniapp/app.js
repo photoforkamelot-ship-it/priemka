@@ -17,16 +17,62 @@
   const fmt = (d) => (d ? d.split("-").reverse().join(".") : "—");
   const fmtShort = (d) => (d ? d.split("-").reverse().slice(0, 2).join(".") : "—");
 
-  async function api(method, path, body) {
-    const r = await fetch(path, {
-      method, headers: { "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "" },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+  // ---------- офлайн: записи без связи — в очередь телефона (IndexedDB), уходят сами; просмотр — из сохранённого ----------
+  const IDB = (() => { let p; return () => (p = p || new Promise((res, rej) => { const q = indexedDB.open("priemka", 1);
+    q.onupgradeneeded = () => { q.result.createObjectStore("outbox", { autoIncrement: true }); q.result.createObjectStore("cache"); };
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); })); })();
+  const idb = async (store, mode, fn) => { const db = await IDB(); return new Promise((res, rej) => { const tx = db.transaction(store, mode); const r = fn(tx.objectStore(store)); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }); };
+  const QUEUEABLE = /\/api\/objects\/[0-9a-f]{12}\/(remarks|checks|statuses|delivery|extras|album|survey|zones|groups|check1)/;
+  let OUT = 0;
+  function outBadge() {
+    let el = document.getElementById("outbox"); if (!el) { el = document.createElement("div"); el.id = "outbox"; document.body.appendChild(el); el.onclick = () => flush(true); }
+    el.hidden = !OUT; el.textContent = `⇡ не отправлено: ${OUT} — уйдёт при связи`;
+  }
+  async function outCount() { try { OUT = (await idb("outbox", "readonly", (s) => s.count())) || 0; } catch (e) { OUT = 0; } outBadge(); }
+  let flushing = false;
+  async function flush(manual) {
+    if (flushing) return; flushing = true;
+    try {
+      const keys = (await idb("outbox", "readonly", (s) => s.getAllKeys())) || [];
+      for (const k of keys) {
+        const it = await idb("outbox", "readonly", (s) => s.get(k));
+        try { await apiNet(it.method, it.path, it.body); }
+        catch (e) { if (e.offline) break; toast("Не отправилось: " + e.message, "err"); }
+        await idb("outbox", "readwrite", (s) => s.delete(k));
+      }
+    } catch (e) {} finally { flushing = false; await outCount(); if (manual && !OUT) toast("Всё отправлено"); }
+  }
+  window.addEventListener("online", () => flush());
+  setInterval(() => { if (OUT) flush(); }, 20000);
+  async function apiNet(method, path, body) {
+    let r;
+    try {
+      r = await fetch(path, { method, headers: { "Content-Type": "application/json", "X-Telegram-Init-Data": tg ? tg.initData : "" }, body: body ? JSON.stringify(body) : undefined });
+    } catch (e) { const er = new Error("нет связи"); er.offline = true; throw er; }
     const ct = r.headers.get("Content-Type") || "";
     const data = ct.includes("json") ? await r.json() : await r.blob();
     if (!r.ok) throw new Error((data && data.error) || "ошибка " + r.status);
     return data;
   }
+  async function api(method, path, body) {
+    try {
+      const data = await apiNet(method, path, body);
+      if (method === "GET" && !(data instanceof Blob)) idb("cache", "readwrite", (s) => s.put(data, path)).catch(() => {});
+      return data;
+    } catch (e) {
+      if (!e.offline) throw e;
+      if (method === "GET") {
+        const c = await idb("cache", "readonly", (s) => s.get(path)).catch(() => null);
+        if (c) { toast("Нет связи — показываю сохранённое"); return c; }
+        throw new Error("нет связи, а этот экран ещё не открывали — откройте его до спуска в подвал");
+      }
+      if (!QUEUEABLE.test(path)) throw new Error("нет связи — повторите, когда появится");
+      await idb("outbox", "readwrite", (s) => s.add({ method, path, body, at: Date.now() }));
+      await outCount(); toast("Нет связи — сохранено в телефоне, отправится само");
+      return { queued: true, ...(body || {}) };
+    }
+  }
+  setTimeout(() => outCount().then(() => OUT && flush()), 500);
   // ---------- отклик: вибрация (Telegram) и короткий звук ----------
   const HAP = tg && tg.HapticFeedback;
   let voiceOn = true; try { voiceOn = localStorage.getItem("voice") !== "off"; } catch (e) {}
@@ -1263,6 +1309,7 @@
     const phrBox = document.getElementById("phr");
     let phrAll = false;
     const drawPhr = () => {
+      if (!phrBox.isConnected || !document.getElementById("zone")) return;
       const sec = segVal("sec") === "Оборудование" ? "equip" : "build", z = document.getElementById("zone").value;
       const list = rid ? [] : suggestPhrases(PH, sec, z, ta.value, phrAll ? 20 : 5);
       phrBox.innerHTML = list.length ? `<span class="kicker">Типовые формулировки — коснитесь, затем допишите</span><div class="chips phr">${list.map((x) => `<button type="button" class="chip" data-tp="${esc(x)}">${esc(x)}</button>`).join("")}${phrAll ? "" : `<button type="button" class="chip ghost" id="phrMore">ещё…</button>`}</div>` : "";
@@ -1278,7 +1325,7 @@
     let respTouched = !!r.responsible, suggested = "";
     const whyEl = document.getElementById("respWhy");
     function autoResp() {
-      if (respTouched) return;
+      if (respTouched || !document.getElementById("resp") || !document.getElementById("respWhy")) return;
       const sec = segVal("sec") === "Оборудование" ? "equip" : "build", s = suggestResp(people, sec, ta.value);
       const sel = document.getElementById("resp");
       if (s) { sel.value = s.name; suggested = s.name; whyEl.innerHTML = `Подставлено: <b>${esc(s.name)}</b> — ${esc(s.why)}. Можно сменить или убрать.`; }
@@ -1305,9 +1352,12 @@
       if (!rid && !newFiles.length && !body.question && !noPhotoOk) { noPhotoOk = true; toast("Нужно хотя бы одно фото. Нажмите «Сохранить» ещё раз, если добавите позже", "err"); document.getElementById("npL").classList.add("warnb"); return; }
       if (respSel.value && respSel.value !== suggested) learnResp(ta.value, respSel.value);
       try {
+        if (!rid) body.id = [...crypto.getRandomValues(new Uint8Array(6))].map((x) => x.toString(16).padStart(2, "0")).join("");
         const saved = rid ? await api("PUT", `/api/objects/${id}/remarks/${rid}`, body) : await api("POST", `/api/objects/${id}/remarks`, body);
-        for (const f of newFiles) { try { toast("Загружаю фото на Диск…"); await api("POST", `/api/objects/${id}/remarks/${saved.id}/photo`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); } }
-        toast("Сохранено"); location.hash = `#o/${id}/r/${saved.id}`;
+        const sid = rid || saved.id || body.id;
+        for (const f of newFiles) { try { toast("Загружаю фото на Диск…"); await api("POST", `/api/objects/${id}/remarks/${sid}/photo`, { image_b64: await shrink(f), key: sid + "_" + f.name + "_" + f.size }); } catch (e) { toast(e.message); } }
+        if (saved.queued || OUT) { toast("Сохранено в телефоне — уйдёт, когда появится связь"); location.hash = back; return; }
+        toast("Сохранено"); location.hash = `#o/${id}/r/${sid}`;
       } catch (e) { toast(e.message); }
     };
     const ph = document.getElementById("photo");

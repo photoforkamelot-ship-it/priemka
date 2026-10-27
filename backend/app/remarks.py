@@ -34,7 +34,8 @@ def validate(r: Remark):
 
 
 def create(obj: StoreObject, data: dict, author_tg: int, author_name: str) -> Remark:
-    r = Remark(id=new_id(), section=data.get("section", "build"), zone=data.get("zone", ""), text=data.get("text", "").strip(),
+    cid = str(data.get("id") or "")
+    r = Remark(id=cid if re.fullmatch(r"[0-9a-f]{12}", cid) and not any(x.id == cid for x in obj.remarks) else new_id(), section=data.get("section", "build"), zone=data.get("zone", ""), text=data.get("text", "").strip(),
                deadline=data.get("deadline", "") or "", deadline_ask=data.get("deadline_ask", "") or "",
                responsible=data.get("responsible", ""), responsible_email=data.get("responsible_email", ""),
                question=bool(data.get("question")), author_tg=author_tg, author_name=author_name,
