@@ -343,6 +343,7 @@
     before(20, `<div class="pform">${pf("trainer", tr, "Тренер по региону")}${pf("ahch_curator", cu, "Куратор АХЧ в регионе")}
       <div class="pfield"><b>Размен — из какого магазина</b><input data-donor value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">${donorH}</div></div>`);
     if (o.okrug === "ЦФО" && /^М/i.test(o.code || "") && /москв/i.test((o.city || "") + " " + (o.address || ""))) before(5, `<div class="btns"><a class="btn main" href="#o/${id}/check1">Письмо о первом чеке — фото чеков и даты</a></div>`);
+    before(4, `<div class="btns"><button class="small" data-print="maxvcf">👥 Участники (.vcf) — в чат</button><a class="btn small ghost" href="#o/${id}/plan">🖼 Иконка группы — из плана (✂ → «Иконка МАХ»)</a></div>`);
     before(21, `<div class="btns"><button class="small" data-print="ahchlist">🖨 Лист готовности на печать</button><a class="btn small ghost" href="#o/${id}/walk/3">Скан — в «Обход → Этап 3»</a></div>`);
     before(21, cu.name || cu.phone ? `<div class="row"><span><b>${esc(cu.name || "Куратор АХЧ")}</b></span>${cu.phone ? `<a class="btn small main" href="tel:${tel(cu.phone)}">📞 Позвонить</a>` : ""}</div>`
       : `<div class="note">Контакт куратора — у тренера по региону. Внесите его в пункте ☎ выше.</div>`);
@@ -1405,8 +1406,20 @@
         <label class="f">Название (чтобы повторить одной кнопкой)<input id="cpn" placeholder="Касса, Пекарня, Склад…"></label>
         <label class="f">Листов A4${segHtml("cps", ["Авто", "1", "2", "4", "6"], "Авто")}</label>
         <label class="tick" style="font-weight:500"><input type="checkbox" id="cpm" checked> С метками замечаний (номера как в письме)</label>
-        <button class="main" id="cpGo">🖨 В чат на печать</button>`);
+        <button class="main" id="cpGo">🖨 В чат на печать</button>
+        <button class="small ghost" id="cpIcon">🖼 Иконка группы в МАХ (квадрат из этого участка)</button>`);
       bindSeg("cps");
+      document.getElementById("cpIcon").onclick = async () => {
+        // квадрат по центру рамки, 640×640, снизу — название группы
+        const im = document.getElementById("pimg"), W = im.naturalWidth, Hh = im.naturalHeight;
+        const cx = (x0 + x1) / 2 * W, cy = (y0 + y1) / 2 * Hh, side = Math.max((x1 - x0) * W, (y1 - y0) * Hh);
+        const c = document.createElement("canvas"); c.width = c.height = 640; const g = c.getContext("2d");
+        g.fillStyle = "#fff"; g.fillRect(0, 0, 640, 640);
+        g.drawImage(im, cx - side / 2, cy - side / 2, side, side, 0, 0, 640, 640);
+        g.fillStyle = "rgba(255,221,0,.92)"; g.fillRect(0, 540, 640, 100);
+        g.fillStyle = "#111"; g.font = "bold 46px -apple-system, Inter, Arial"; g.textAlign = "center"; g.fillText(o.code, 320, 606);
+        try { await api("POST", `/api/objects/${id}/max-icon`, { image_b64: c.toDataURL("image/jpeg", 0.9).split(",")[1] }); toast("Иконка — в чате с ботом"); } catch (e) { toast(e.message); }
+      };
       document.getElementById("cpGo").onclick = () => { const s = segVal("cps"); sendCrop({ page, box: [x0, y0, x1, y1], sheets: s === "Авто" ? 0 : +s, marks: document.getElementById("cpm").checked, name: document.getElementById("cpn").value.trim() }).then(() => document.getElementById("cpn").value.trim() && planScreen(id, plan.id, page)); };
     };
     planViewer(document.getElementById("pv"), document.getElementById("stage"), pg, (x, y) => {

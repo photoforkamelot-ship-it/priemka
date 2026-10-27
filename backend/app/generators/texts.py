@@ -71,7 +71,8 @@ def outlook_signature(obj: StoreObject) -> str:
 
 def whatsapp_group_name(obj: StoreObject) -> str:
     """«ПР22 Комсомольский 36» — по образцу «М01 Московская 1»."""
-    street = re.sub(r"\b(ул|улица|пр-т|проспект|пр|пер|переулок|б-р|бульвар|ш|шоссе)\.?\s*", "", obj.address, flags=re.I)
+    street = re.sub(r"(?<![\w-])(пр-кт|пр-т|пр-д|проспект|проезд|улица|ул|переулок|пер|бульвар|б-р|шоссе|ш|площадь|пл|набережная|наб|микрорайон|мкр|тракт|пр)\.?(?![\w-])\s*", "", obj.address, flags=re.I)
+    street = re.sub(r"\b(д|дом|стр|корп|к)\.\s*", "", street, flags=re.I)
     street = re.sub(r"[,]", " ", street)
     street = re.sub(r"\s+", " ", street).strip()
     return f"{obj.code} {street}"

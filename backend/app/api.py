@@ -123,7 +123,8 @@ class Api:
             (r"^/api/directory$", "GET", self.directory),
             (r"^/api/store/([^/]+)$", "GET", self.store_hint),
             (o + r"/pdf/(konvert|dvornik|ahchlist)", "GET", self.get_pdf),
-            (o + r"/print/(konvert|dvornik|vcf|ahchlist)", "POST", self.send_to_chat),
+            (o + r"/print/(konvert|dvornik|vcf|ahchlist|maxvcf)", "POST", self.send_to_chat),
+            (o + r"/max-icon", "POST", self.max_icon),
             (o + r"/ahch-scan", "POST", self.ahch_scan),
             (o + r"/docs", "GET", self.get_docs),
             (o + r"/feedback", "GET", self.get_feedback),
@@ -730,6 +731,14 @@ class Api:
         self.store.put(o)
         return _json(o.extras)
 
+    def max_icon(self, u, data, _b, oid):
+        """Квадратная иконка группы в МАХ из фрагмента плана — в чат с ботом (сохранить и поставить на группу)."""
+        o = self._obj(oid, u)
+        if not self.sender:
+            raise ValueError("бот не подключён")
+        self.sender.send_document(u.id, f"ikonka-{o.code}.jpg", base64.b64decode(data["image_b64"]), "Иконка группы в МАХ: сохраните фото → в группе «Изменить» → фото")
+        return _json({"sent": True})
+
     def get_vcf(self, u, _d, _b, oid):
         o = self._obj(oid, u)
         return 200, {"Content-Type": "text/vcard; charset=utf-8",
@@ -740,7 +749,9 @@ class Api:
         if not self.sender:
             raise ValueError("бот не подключён")
         o = self._obj(oid, u)
-        if kind == "vcf":
+        if kind == "maxvcf":
+            data, name, cap = vcf.max_group(o).encode(), f"gruppa-max-{o.code}.vcf", "Участники группы в МАХ — откройте, добавьте в контакты, затем в группу"
+        elif kind == "vcf":
             data, name, cap = vcf.for_object(o).encode(), f"kontakty-{o.code}.vcf", "Контакты объекта — откройте, чтобы добавить в телефон"
         else:
             st, _h, data = self.get_pdf(u, None, None, oid, kind)

@@ -48,3 +48,21 @@ def for_object(obj: StoreObject, contacts: list[dict] | None = None) -> str:
         if p.filled:
             cards.append(card(p.name, role, [p.phone], p.email, f"Ярче · {obj.code}"))
     return "\r\n".join(cards) + "\r\n"
+
+
+MAX_GROUP = ["Тарасова", "Ларионова", "Жихарева", "Суркова", "Ильиных", "Тимофеева", "Слёзкин", "Черепанова", "Кускова", "Филатова"]
+
+
+def max_group(obj: StoreObject, contacts: list[dict] | None = None) -> str:
+    """Участники группы в МАХ по регламенту + директор магазина: один файл — все номера в контакты, потом добавить в группу."""
+    contacts = contacts if contacts is not None else json.loads(CONTACTS.read_text(encoding="utf-8"))
+    cards = []
+    for sur in MAX_GROUP:
+        c = next((x for x in contacts if x["fio"].split()[0].replace("ё", "е") == sur.replace("ё", "е")), None)
+        if c and (c.get("phones") or c.get("phone")):
+            phones = c.get("phones") or [c.get("phone")]
+            cards.append(card(c["fio"], c.get("role", ""), phones, c.get("email", ""), "Ярче!"))
+    d = obj.director
+    if d.name and d.phone:
+        cards.append(card(d.name, f"Директор магазина {obj.code}", [d.phone], obj.store_email or "", "Ярче!"))
+    return "\r\n".join(cards) + "\r\n"
