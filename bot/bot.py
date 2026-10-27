@@ -47,7 +47,32 @@ class Sender:
 
 def handle_update(update: dict, sender: Sender, store: Store) -> None:
     msg = update.get("message")
-    if msg and msg.get("text", "").startswith(("/start", "/objects")):
+    txt = (msg or {}).get("text", "")
+    if msg and txt.startswith("/start join_"):
+        # приглашение в команду объекта: /start join_<объект>_<код>
+        try:
+            _, oid, code = txt.split(maxsplit=1)[1].split("_", 2)
+        except ValueError:
+            oid = code = ""
+        o = store.get(oid) if oid else None
+        frm = msg.get("from", {})
+        uid = frm.get("id")
+        name = " ".join(x for x in (frm.get("first_name"), frm.get("last_name")) if x) or frm.get("username") or str(uid)
+        if not o or not code or o.flags.get("invite") != code:
+            sender.send_text(msg["chat"]["id"], "Ссылка-приглашение устарела. Попросите руководителя прислать новую.")
+            return
+        if uid != o.owner_tg and uid not in o.team_tg:
+            o.team_tg.append(uid)
+        o.flags.setdefault("team_names", {})[str(uid)] = name
+        store.put(o)
+        sender.send_text(msg["chat"]["id"], f"Вы в команде объекта {o.code}, {o.full_address}. Замечания, фото и недовозы — в приложении.",
+                         [("Открыть объект", f"open:o/{o.id}")])
+        try:
+            sender.send_text(o.owner_tg, f"{name} присоединился к команде объекта {o.code}.", [("Команда", f"open:o/{o.id}/data")])
+        except Exception:
+            pass
+        return
+    if msg and txt.startswith(("/start", "/objects")):
         sender.send_text(msg["chat"]["id"], "Приёмка магазина: обход, замечания, письмо, первый день и памятка.",
                          [("Открыть приложение", "open:objects")])
         return

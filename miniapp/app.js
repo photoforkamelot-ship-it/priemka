@@ -278,6 +278,21 @@
     };
   }
 
+  // команда объекта: руководитель приглашает помощников ссылкой из бота; помощник не ставит «принято»
+  async function teamCard(id) {
+    const box = document.getElementById("team"); if (!box) return;
+    const T = await api("GET", `/api/objects/${id}/team`);
+    box.innerHTML = `<span class="title">Команда · ${1 + T.members.length}</span>
+      <span class="sub"><b>${esc(T.owner.name)}</b> — руководитель: всё, включая «✓ Принято»</span>
+      ${T.members.map((m) => `<div class="row"><span>${esc(m.name)} <span class="sub">— помощник: зоны, замечания, фото, недовозы</span></span>${T.is_owner ? `<button class="small ghost" data-rm="${m.id}">убрать</button>` : ""}</div>`).join("")}
+      ${T.is_owner ? (T.link ? `<span class="sub">Ссылка-приглашение — отправьте помощнику в Telegram. Он нажмёт «Старт» и сразу увидит объект.</span>
+        <div class="btns"><button class="small main" id="tShare">Отправить приглашение</button><button class="small ghost" id="tCopy">Скопировать ссылку</button><button class="small ghost" id="tNew">Новая ссылка</button></div>`
+        : `<button class="small main" id="tNew">Пригласить помощника</button>`) : ""}`;
+    const nw = document.getElementById("tNew"); if (nw) nw.onclick = async () => { await api("POST", `/api/objects/${id}/team/invite`); teamCard(id); };
+    const sh = document.getElementById("tShare"); if (sh) sh.onclick = () => { const txt = "Приглашаю в команду приёмки магазина"; if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(T.link)}&text=${encodeURIComponent(txt)}`); else copy(T.link); };
+    const cp = document.getElementById("tCopy"); if (cp) cp.onclick = () => copy(T.link);
+    box.querySelectorAll("[data-rm]").forEach((b) => (b.onclick = async () => { await api("POST", `/api/objects/${id}/team/${b.dataset.rm}/remove`); toast("Убран из команды; старая ссылка больше не работает"); teamCard(id); }));
+  }
   async function dataScreen(id) {
     const [o, d] = await Promise.all([api("GET", `/api/objects/${id}`), directory()]);
     top({ back: ["#objects", "Объекты"], cap: objLine(o), title: "Данные объекта", tabs: [id, "data"] });
@@ -294,8 +309,10 @@
       <label class="card tick"><input type="checkbox" id="dv" ${o.flags.dvornik_hired ? "checked" : ""}> Дворник оформлен — напоминать про акт в конце месяца</label>
       <div class="card" style="background:var(--accent-soft);border:0"><span class="title" style="font-size:14px">Региональные — ${esc(o.okrug)}</span><span class="sub">${REGIONAL[o.okrug] || ""}</span></div>
       <button id="vcf">Контакты объекта в чат (.vcf)</button>
+      <div class="card" id="team"><span class="title">Команда</span><span class="sub">Загрузка…</span></div>
       <div class="bottom"><button class="main" id="save">Сохранить</button></div>`);
     bindSeg("okrug"); bindStoreHint(); bindPeople(d); bindDates();
+    teamCard(id);
     document.getElementById("save").onclick = async () => {
       try { await api("PUT", `/api/objects/${id}`, { ...readForm(), dvornik_hired: document.getElementById("dv").checked, razmen_donor: { code: document.getElementById("donor").value.trim().toUpperCase() } }); DIR = null; toast("Сохранено"); location.hash = `#o/${id}`; } catch (e) { toast(e.message); }
     };
@@ -1216,7 +1233,9 @@
         <div class="card"><span class="title">Комментарии</span>
         ${r.comments.map((c) => `<div class="sub" style="color:${c.color || "inherit"}"><b>${esc(c.author)}</b> · ${fmt(c.date)}: ${esc(c.text)}</div>`).join("")}
         <select id="ca"><option value="">Прогресс / новый срок — оранжевым</option>${COMMENT_AUTHORS.map((a) => `<option>${a}</option>`).join("")}${o.coordinator.name ? `<option>${esc(o.coordinator.name)}</option>` : ""}</select>
-        <textarea id="cm" rows="2" placeholder="Ответ из ветки, прогресс («сегодня сделают»)"></textarea><button class="small" id="addc">Добавить</button></div>` : ""}
+        <textarea id="cm" rows="2" placeholder="Ответ из ветки, прогресс («сегодня сделают»)"></textarea><button class="small" id="addc">Добавить</button></div>
+        ${(r.log || []).length ? `<details class="card"><summary class="title" style="cursor:pointer">История правок · ${r.log.length}</summary>
+          ${r.log.slice().reverse().map((l) => `<span class="sub"><b>${esc(l.who)}</b> · ${esc(l.when)} · ${esc(l.what)}${l.before || l.after ? `: ${l.before ? `<s>${esc(l.before)}</s> → ` : ""}${esc(l.after)}` : ""}</span>`).join("")}</details>` : ""}` : ""}
       <div class="bottom"><button class="main" id="save">${rid ? "Сохранить" : "Сохранить и добавить фото"}</button></div>`);
     bindSeg("sec");
     // фраза-ссылка плашками: первое касание — начало, второе — конец

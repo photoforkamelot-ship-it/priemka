@@ -96,3 +96,47 @@ def test_timed_reminders():
     assert "update_soon" not in keys(d2, "09:45")
     o.flags["sent"] = {"dl_today_r1": d2.isoformat()}
     assert "dl_today_r1" not in keys(d2, "11:00")
+
+
+class _Sender:
+    def __init__(self):
+        self.sent = []
+
+    def send_text(self, chat_id, text, buttons=None):
+        self.sent.append((chat_id, text))
+
+    def send_document(self, chat_id, name, content, caption=""):
+        self.sent.append((chat_id, name))
+
+    def call(self, method, data=None):
+        return {"ok": True, "result": {"username": "test_bot"}}
+
+
+def test_team_invite_and_log_and_groups():
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+    from bot.bot import handle_update
+    snd = _Sender()
+    api = Api(MemoryStore(), TOKEN, sender=snd)
+    oid = make(api)
+    st, t = call(api, "POST", f"/api/objects/{oid}/team/invite")
+    assert t["link"].startswith("https://t.me/test_bot?start=join_")
+    payload = t["link"].split("start=")[1]
+    handle_update({"message": {"text": f"/start {payload}", "chat": {"id": 7}, "from": {"id": 7, "first_name": "Пётр"}}}, snd, api.store)
+    st, o = call(api, "GET", f"/api/objects/{oid}", user_id=7)
+    assert st == 200
+    # помощник не ставит «принято», журнал пишет кто и что
+    st, r = call(api, "POST", f"/api/objects/{oid}/remarks", {"section": "build", "zone": "Тамбур", "text": "Покрасить потолок", "deadline": "2026-11-06"}, user_id=7)
+    st, r2 = call(api, "PUT", f"/api/objects/{oid}/remarks/{r['id']}", {"deadline": "2026-11-08", "reason": "нет краски"}, user_id=7)
+    assert any(l["what"] == "срок" and l["before"] == "2026-11-06" and l["after"] == "2026-11-08" for l in r2["log"])
+    st, _ = call(api, "POST", f"/api/objects/{oid}/remarks/{r['id']}/status", {"status": "accepted"}, user_id=7)
+    assert st == 403
+    # объединение в подпункты
+    st, r3 = call(api, "POST", f"/api/objects/{oid}/remarks", {"section": "build", "zone": "Тамбур", "text": "Заменить плитку армстронг", "deadline": "2026-11-06"})
+    st, g = call(api, "POST", f"/api/objects/{oid}/groups", {"members": [r["id"], r3["id"]], "text": "Исправить оформление тамбура"})
+    st, L = call(api, "GET", f"/api/objects/{oid}/letter/first")
+    assert "1. Исправить оформление тамбура:" in L["text"] and "– Покрасить потолок" in L["text"]
+    # убрать из команды — старая ссылка больше не работает
+    call(api, "POST", f"/api/objects/{oid}/team/7/remove")
+    st, _ = call(api, "GET", f"/api/objects/{oid}", user_id=7)
+    assert st == 404

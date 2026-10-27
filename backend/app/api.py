@@ -148,6 +148,9 @@ class Api:
             (o + r"/remarks/([0-9a-f]{12})/img/(before|fix)(\d+)", "GET", self.remark_img),
             (o + r"/remarks/([0-9a-f]{12})/collage", "POST", self.remark_collage),
             (o + r"/groups", "POST", self.create_group),
+            (o + r"/team", "GET", self.get_team),
+            (o + r"/team/invite", "POST", self.team_invite),
+            (o + r"/team/(\d+)/remove", "POST", self.team_remove),
             (o + r"/check1", "GET", self.get_check1),
             (o + r"/check1", "POST", self.put_check1),
             (o + r"/groups/([0-9a-f]{8})/delete", "POST", self.delete_group),
@@ -795,13 +798,14 @@ class Api:
     def create_remark(self, u, data, _b, oid):
         o = self._obj(oid, u)
         r = rm.create(o, data, u.id, u.display)
+        rm.log(r, u.display, "создан пункт", "", r.text)
         self.store.put(o)
         return _json(asdict(r), 201)
 
     def update_remark(self, u, data, _b, oid, rid):
         o = self._obj(oid, u)
         r = self._remark(o, rid)
-        rm.update(r, data)
+        rm.update(r, data, u.display)
         self.store.put(o)
         return _json(asdict(r))
 
@@ -825,7 +829,7 @@ class Api:
             self._thumb(o.id, r.id, "fix", n).write_bytes(img)
             if r.status == "open":
                 rm.set_status(r, "fixed", is_owner=False)
-            r.log.append({"who": u.display, "when": date.today().isoformat(), "what": "исправление", "before": "", "after": f"фото после {n}"})
+            rm.log(r, u.display, "исправление", "", f"фото «после» {n}")
         else:
             n = len(r.photos) + 1
             sub = f"{num:02d}_{r.phrase[:40]}"
@@ -911,6 +915,44 @@ class Api:
         self.store.put(o)
         return _json(self._check1_letter(o))
 
+    # ---------- команда: приглашение помощников ссылкой из бота ----------
+    def _bot_name(self) -> str:
+        name = os.environ.get("BOT_USERNAME", "")
+        if not name and self.sender:
+            try:
+                name = self.sender.call("getMe")["result"]["username"]
+                os.environ["BOT_USERNAME"] = name
+            except Exception:
+                pass
+        return name or "priemka_yarche_bot"
+
+    def get_team(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        names = o.flags.get("team_names", {})
+        inv = o.flags.get("invite", "")
+        return _json({"owner": {"id": o.owner_tg, "name": names.get(str(o.owner_tg), "руководитель")},
+                      "members": [{"id": x, "name": names.get(str(x), f"участник {x}")} for x in o.team_tg],
+                      "is_owner": u.id == o.owner_tg,
+                      "link": f"https://t.me/{self._bot_name()}?start=join_{o.id}_{inv}" if inv and u.id == o.owner_tg else ""})
+
+    def team_invite(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        if u.id != o.owner_tg:
+            raise PermissionError("приглашать может только руководитель команды")
+        o.flags["invite"] = os.urandom(5).hex()
+        o.flags.setdefault("team_names", {})[str(u.id)] = u.display
+        self.store.put(o)
+        return self.get_team(u, None, None, oid)
+
+    def team_remove(self, u, _d, _b, oid, tid):
+        o = self._obj(oid, u)
+        if u.id != o.owner_tg:
+            raise PermissionError("убрать из команды может только руководитель")
+        o.team_tg = [x for x in o.team_tg if x != int(tid)]
+        o.flags["invite"] = os.urandom(5).hex()   # старая ссылка перестаёт работать
+        self.store.put(o)
+        return self.get_team(u, None, None, oid)
+
     def create_group(self, u, data, _b, oid):
         """Объединение пунктов в подпункты: общая формулировка; у подпунктов остаются свои сроки, фото и точки на плане."""
         o = self._obj(oid, u)
@@ -938,7 +980,10 @@ class Api:
     def remark_status(self, u, data, _b, oid, rid):
         o = self._obj(oid, u)
         r = self._remark(o, rid)
+        old = r.status
         rm.set_status(r, data["status"], is_owner=(u.id == o.owner_tg))
+        if old != r.status:
+            rm.log(r, u.display, "статус", rm.STATUS_NAMES.get(old, old), rm.STATUS_NAMES.get(r.status, r.status))
         self.store.put(o)
         return _json(asdict(r))
 
@@ -950,5 +995,7 @@ class Api:
             from .letter import ORANGE
             col = ORANGE
         rm.add_comment(r, data.get("author") or u.display, data.get("text", ""), col)
+        if (data.get("text") or "").strip():
+            rm.log(r, u.display, "комментарий", "", f'{data.get("author") or ""}: {data["text"].strip()}'.lstrip(": "))
         self.store.put(o)
         return _json(asdict(r))

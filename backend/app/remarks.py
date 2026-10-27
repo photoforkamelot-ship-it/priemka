@@ -58,7 +58,28 @@ def _mark(m) -> dict:
     return {"plan": str(m["plan"]), "page": int(m.get("page", 1)), "x": round(x, 5), "y": round(y, 5)}
 
 
-def update(r: Remark, data: dict):
+FIELD_NAMES = {"section": "раздел", "zone": "зона", "text": "текст", "phrase": "фраза-ссылка", "deadline": "срок",
+               "deadline_ask": "срок уточняется у", "deadline_text": "срок", "responsible": "ответственный", "question": "вопрос"}
+STATUS_NAMES = {"open": "открыто", "fixed": "исправлено", "accepted": "принято", "fixed_on_site": "устранено в ходе приёмки"}
+
+
+def log(r: Remark, who: str, what: str, before: str = "", after: str = ""):
+    from datetime import datetime
+    r.log.append({"who": who, "when": datetime.now().strftime("%Y-%m-%d %H:%M"), "what": what, "before": before, "after": after})
+
+
+def update(r: Remark, data: dict, who: str = ""):
+    """Правка пункта; каждое изменённое поле — в журнал: кто, когда, было → стало."""
+    before = {k: getattr(r, k) for k in FIELD_NAMES}
+    _update(r, data)
+    if who:
+        for k, name in FIELD_NAMES.items():
+            a, b = before[k], getattr(r, k)
+            if a != b:
+                log(r, who, name, "да" if a is True else "нет" if a is False else str(a), "да" if b is True else "нет" if b is False else str(b))
+
+
+def _update(r: Remark, data: dict):
     if "plan_mark" in data:
         r.plan_mark = _mark(data["plan_mark"])
     for k in ("section", "zone", "text", "phrase", "deadline_ask", "deadline_text", "responsible", "responsible_email"):
