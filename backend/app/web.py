@@ -142,6 +142,10 @@ class App:
             return 200, {"Content-Type": "application/json"}, json.dumps(self.status(), ensure_ascii=False).encode()
         if method != "GET":
             return 405, {}, b""
+        from .sources import override
+        ov = override(path)
+        if ov:
+            return 200, {"Content-Type": "application/pdf", "Cache-Control": "no-cache"}, ov.read_bytes()
         p = (STATIC / (path.lstrip("/") or "index.html")).resolve()
         if not str(p).startswith(str(STATIC.resolve())) or not p.is_file():
             p = STATIC / "index.html"

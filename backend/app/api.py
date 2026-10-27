@@ -96,6 +96,10 @@ class Api:
         o = r"/api/objects/([0-9a-f]{12})"
         return [
             (r"/api/objects", "GET", self.list_objects),
+            (r"/api/sources", "GET", self.list_sources),
+            (r"/api/sources/(\w+)", "POST", self.replace_source),
+            (r"/api/sources/archive/([\w.-]+\.pdf)", "GET", self.source_archive),
+            (r"/api/print-file", "POST", self.print_file),
             (r"/api/objects", "POST", self.create_object),
             (o, "GET", self.get_object),
             (o, "PUT", self.update_object),
@@ -573,6 +577,49 @@ class Api:
         if kind == "konvert":
             return _pdf(pdfs.envelope_insert(o), f"konvert-{o.code}.pdf")
         return _pdf(pdfs.dvornik_poster(o), f"dvornik-{o.code}.pdf")
+
+    # ---------- исходные документы и печать файлов ----------
+    def _is_admin(self, u) -> bool:
+        adm = os.environ.get("ADMIN_TG", "")
+        return bool(self.dev_user) or (adm and str(u.id) in adm.replace(" ", "").split(","))
+
+    def list_sources(self, u, *_):
+        from . import sources
+        return _json({"sources": sources.listing(), "stale": sources.stale_pages(), "admin": self._is_admin(u)})
+
+    def replace_source(self, u, data, _b, sid):
+        """Новая версия исходника: старая — в архив, инструкции на её основе — «источник обновлён», всем руководителям — сообщение."""
+        from . import sources
+        if not self._is_admin(u):
+            raise PermissionError("заменять исходные документы может только администратор справочников")
+        s = sources.replace(sid, base64.b64decode(data["file_b64"]), data.get("version", ""), u.display)
+        if self.sender:
+            users = {x for o in self.store.all() for x in (o.owner_tg, *o.team_tg) if x}
+            for uid in users:
+                try:
+                    self.sender.send_text(uid, f"Обновлён документ «{s['title']}», версия от {s['version']}. "
+                                               "Инструкции на его основе помечены «источник обновлён — проверить».",
+                                          [("Открыть приложение", "open:objects")])
+                except Exception:
+                    pass
+        return self.list_sources(u)
+
+    def source_archive(self, u, _d, _b, name):
+        from . import sources
+        return _pdf(sources.archive_file(name).read_bytes(), name)
+
+    def print_file(self, u, data, *_):
+        """«На печать» любого PDF из памятки: бот присылает файл в чат → «Поделиться» → Kyocera."""
+        from . import sources
+        if not self.sender:
+            raise ValueError("бот не подключён")
+        f = sources.printable(data.get("path", ""))
+        if f.stat().st_size > 49 * 1024 * 1024:
+            raise ValueError("файл больше 50 МБ — Telegram не пропустит")
+        hint = data.get("hint") or "1 копия"
+        name = os.path.basename((data.get("path", "")).split("#")[0].split("?")[0]) or f.name
+        self.sender.send_document(u.id, name, f.read_bytes(), f"На печать: {hint} → «Поделиться» → Kyocera Mobile Print")
+        return _json({"sent": True})
 
     FEEDBACK_TO = ["Сидоров Алексей Вадимович", "Смирнов Сергей Владимирович", "Филатова Анастасия Сергеевна",
                    "Суркова Екатерина Константиновна", "Тимофеева Ксения Александровна"]

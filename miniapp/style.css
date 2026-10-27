@@ -242,3 +242,5 @@ a.chipb{text-decoration:none;display:inline-flex;align-items:center}
 .tips{background:var(--accent-soft);border-radius:10px;padding:6px 10px;margin:2px 0 6px}
 .tips summary{background:none!important;padding:2px 0!important;font-size:13px;font-weight:600;color:var(--link);cursor:pointer}
 .tips ul{margin:6px 0 2px;padding-left:18px;display:grid;gap:4px;font-size:13px;line-height:1.35}
+.srcrow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.srcrow .t{min-width:0;flex:1 1 200px}

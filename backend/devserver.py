@@ -18,7 +18,21 @@ from app.telegram_auth import TgUser
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT.parent / "miniapp"
-api = Api(FileStore(ROOT / "dev-data.json"), bot_token="dev", dev_user=TgUser(id=1, first_name="Тест"), disk=FakeDisk())
+class FakeSender:
+    """Вместо бота: пишет в лог, что было бы отправлено в чат."""
+    def send_text(self, chat_id, text, buttons=None):
+        print(f"[bot → {chat_id}] {text} {buttons or ''}", flush=True)
+
+    def send_document(self, chat_id, name, content, caption=""):
+        print(f"[bot → {chat_id}] файл {name} ({len(content)} байт): {caption}", flush=True)
+
+    def call(self, *a, **k):
+        return {"ok": True}
+
+
+SOURCES_DEV = ROOT / "dev-sources"
+os.environ.setdefault("SOURCES_DIR", str(SOURCES_DEV))
+api = Api(FileStore(ROOT / "dev-data.json"), bot_token="dev", dev_user=TgUser(id=1, first_name="Тест"), disk=FakeDisk(), sender=FakeSender())
 
 
 class H(BaseHTTPRequestHandler):

@@ -315,6 +315,12 @@
       if (!/^(https?:|mailto:|tel:|#)/.test(h)) a.setAttribute("href", MEMO + h);
       a.removeAttribute("target"); a.removeAttribute("download");
     });
+    // «🖨» рядом с каждым PDF памятки — печать через бота
+    const HINTS = { "pokupyurnik-90-listov.pdf": "двусторонняя, книжная, 1 копия", "blanki-s-obrazcami.pdf": "двусторонняя, по числу сотрудников" };
+    wrap.querySelectorAll('a[href$=".pdf"], a[href*=".pdf#"]').forEach((a) => {
+      const h = a.getAttribute("href").split("#")[0], name = h.split("/").pop();
+      a.insertAdjacentHTML("afterend", `<button class="btn small ghost" type="button" data-pf="${h}" data-pfh="${HINTS[name] || "1 копия"}" aria-label="На печать">🖨</button>`);
+    });
     const reg = { "СФО": "sfo", "УФО": "ufo", "ЦФО": "cfo" }[o.okrug] || "sfo";
     wrap.querySelectorAll("[data-reg]").forEach((el) => { if (!el.dataset.reg.split(" ").includes(reg)) el.remove(); });
     const item = (n) => wrap.querySelector(`details.item[data-id="${n}"]`);
@@ -395,6 +401,7 @@
     }));
     $app.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => copy(document.getElementById(b.dataset.copy).textContent)));
     $app.querySelectorAll("[data-print]").forEach((b) => (b.onclick = () => printToChat(id, b.dataset.print)));
+    bindPrintFiles();
     const savePrep = async (d) => { try { await api("PUT", `/api/objects/${id}`, d); toast("Сохранено"); prep(id); } catch (e) { toast(e.message); } };
     $app.querySelectorAll("[data-pk]").forEach((inp) => (inp.onchange = () => savePrep({ [inp.dataset.pk]: { [inp.dataset.pf]: inp.value.trim() } })));
     $app.querySelectorAll("[data-hint]").forEach((b) => (b.onclick = () => savePrep({ [b.dataset.hint]: H[b.dataset.hint] })));
@@ -421,24 +428,39 @@
       ["Спецодежда на кассе", "после доступа к кассе", MEMO + "instr/forma/forma.html"],
       ["Дворник по договору ГПХ", "объявление, конверт, договор, акт", MEMO + "instr/dvornik/dvornik.html"]]],
     ["Касса", [["Размен: передача ДС через ЯК", "Выдача ДС · ПКО/РКО · первый отчёт 0,01", MEMO + "instr/ds/peredacha-ds.html"], ["Покупюрник и кассовая дисциплина", "СФО/УФО от 01.07.2026 · ЦФО от 02.07.2025", MEMO + "instr/pokup/pokupyurnik.html"]]],
-    ["Исходные документы (PDF)", [
-      ["Мобильные кадры", "от 19.06.2025", ORIG + "pamyatka-originaly-1/mobilnye-kadry-instrukciya-19.06.2025.pdf"],
-      ["Ярче Коммуникации", "от 11.08.2026", ORIG + "pamyatka-originaly-1/yarche-kommunikacii-instrukciya-11.08.2026.pdf"],
-      ["Кадровое делопроизводство", "2025", ORIG + "pamyatka-originaly-2/kadrovoe-deloproizvodstvo-2025.pdf"],
-      ["Кассовая дисциплина СФО и УФО", "от 01.07.2026", ORIG + "pamyatka-originaly-2/kassovaya-disciplina-sfo-ufo-01.07.2026.pdf"],
-      ["Кассовая дисциплина ЦФО", "от 02.07.2025", ORIG + "pamyatka-originaly-2/kassovaya-disciplina-cfo-02.07.2025.pdf"],
-      ["МК: договоры и акты (дворник)", "от 19.06.2025", ORIG + "pamyatka-originaly-2/mk-dogovory-i-akty-19.06.2025.pdf"],
-      ["Памятка по дворнику ГПХ", "от 02.05.2023", ORIG + "pamyatka-originaly-2/pamyatka-dvornik-gph-02.05.2023.pdf"]]],
   ];
   async function instrScreen(id) {
     let o = null; if (id) o = await api("GET", `/api/objects/${id}`);
+    let S = { sources: [], stale: {}, admin: false }; try { S = await api("GET", "/api/sources"); } catch (e) {}
     top(o ? { back: ["#objects", "Объекты"], cap: objLine(o), title: "Инструкции", tabs: [id, "instr"] } : { back: ["#objects", "Объекты"], title: "Инструкции" });
-    render(INSTR.map(([g, rows]) => `<div class="group">${g}</div><div class="list">${rows.map(([t, s, u]) =>
-      `<a href="${u}"><span class="t"><b>${esc(t)}</b><span>${esc(s)}</span></span><span class="go">${u.endsWith(".pdf") ? "PDF" : "›"}</span></a>`).join("")}</div>`).join("")
-      + `<div class="group">Ещё</div><div class="list">
-        <a href="${MEMO}index.html"><span class="t"><b>Памятка «Не забывай» целиком</b><span>19 пунктов, без привязки к объекту</span></span><span class="go">›</span></a>
+    const stale = (u) => S.stale[u];
+    render(INSTR.map(([g, rows]) => `<div class="group">${g}</div><div class="list">${rows.map(([t2, s, u]) =>
+      `<a href="${u}"><span class="t"><b>${esc(t2)}</b><span>${esc(s)}</span>${stale(u) ? `<span class="chip warn" style="white-space:normal">источник обновлён — проверить: ${esc(stale(u))}</span>` : ""}</span><span class="go">›</span></a>`).join("")}</div>`).join("")
+      + `<div class="group">Исходные документы</div><div class="list">${S.sources.map((s) => `<div class="srcrow"><span class="t"><b>${esc(s.title)}</b>
+          <span>${s.version ? "версия от " + esc(s.version) : "без даты"}${s.replaced ? ` · <b style="color:var(--ok)">обновлён ${fmt(s.replaced)}</b>` : ""}${s.archive.length ? ` · в архиве: ${s.archive.map((a) => `<a href="#" data-arch="${esc(a.file)}">${esc(a.version)}</a>`).join(", ")}` : ""}</span></span>
+          <span class="row" style="gap:6px;flex:0 0 auto"><a class="btn small ghost" href="${s.path}">Открыть</a><button class="small ghost" data-pf="${s.path}" aria-label="На печать">🖨</button>
+          ${S.admin ? `<label class="btn small ghost">Заменить<input type="file" accept="application/pdf" hidden data-rep="${s.id}"></label>` : ""}</span></div>`).join("")}</div>
+      ${S.admin ? `<span class="sub">Замена: загрузите новый PDF — дата версии возьмётся из текста («Версия от …»), старый файл уйдёт в архив, инструкции на его основе получат пометку «источник обновлён — проверить», бот сообщит всем руководителям.</span>` : ""}
+      <div class="group">Ещё</div><div class="list">
+        <a href="${MEMO}index.html"><span class="t"><b>Памятка «Не забывай» целиком</b><span>без привязки к объекту</span></span><span class="go">›</span></a>
         ${o ? `<a href="#o/${id}/ahch"><span class="t"><b>Заявка АХЧ</b><span>16 работ по образцу</span></span><span class="go">›</span></a>` : ""}
         <a href="${MEMO}files/kontakty-otkrytie.vcf"><span class="t"><b>Контакты открытия (.vcf)</b><span>все номера одним файлом</span></span><span class="go">↓</span></a></div>`);
+    bindPrintFiles();
+    $app.querySelectorAll("[data-rep]").forEach((inp) => (inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      const version = "";
+      try { toast("Загружаю новую версию…"); await api("POST", `/api/sources/${inp.dataset.rep}`, { file_b64: await b64file(f), version }); toast("Документ заменён, руководители уведомлены"); instrScreen(id); } catch (e) { toast(e.message); }
+    }));
+    $app.querySelectorAll("[data-arch]").forEach((a) => (a.onclick = async (e) => { e.preventDefault();
+      const r = await fetch(`/api/sources/archive/${a.dataset.arch}`, { headers: { "X-Telegram-Init-Data": tg ? tg.initData : "" } });
+      if (!r.ok) return toast("файл не найден"); const url = URL.createObjectURL(await r.blob()); window.open(url, "_blank"); }));
+  }
+  // «🖨» у любого PDF: бот присылает файл в чат → «Поделиться» → Kyocera
+  async function printFile(path, hint) {
+    try { await api("POST", "/api/print-file", { path, hint }); toast("Файл в чате с ботом — «Поделиться» → Kyocera"); } catch (e) { toast(e.message); }
+  }
+  function bindPrintFiles() {
+    $app.querySelectorAll("[data-pf]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); printFile(b.dataset.pf, b.dataset.pfh); }));
   }
 
   // ---------- договоры ----------
@@ -533,6 +555,7 @@
         <div class="btns"><button class="main" data-print="konvert" ${ok ? "" : "disabled"}>Прислать в чат на печать</button></div></div>
       <div class="list"><a href="${MEMO}instr/dvornik/dvornik.html"><span class="t"><b>Инструкция: договор и акт в МК</b><span>с картинками и PDF</span></span><span class="go">›</span></a></div>`);
     $app.querySelectorAll("[data-print]").forEach((b) => (b.onclick = () => printToChat(id, b.dataset.print)));
+    bindPrintFiles();
   }
   // ---------- лист готовности АХЧ: печать шаблона и скан заполненного ----------
   const b64file = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onerror = rej; r.onload = () => res(String(r.result).split(",")[1]); r.readAsDataURL(f); });

@@ -5,3 +5,4 @@ __pycache__/
 backend/dev-data.json
 backend/data/
 *.sqlite
+backend/dev-sources/
