@@ -15,7 +15,7 @@ _N = json.loads((Path(__file__).resolve().parent / "assets" / "norms.json").read
 LISTS = {"mto": "НЕДОВОЗ МЕЛКОГО ТОРГОВОГО ОБОРУДОВАНИЯ", "hoz": "НЕДОВОЗ ХОЗТОВАРОВ",
          "coffee": "НЕДОВОЗ РАСХОДНЫХ МАТЕРИАЛОВ КОФЕ"}
 SURVEY_DEFAULTS = {"coffee": 1, "grids": None, "ends": None, "superstructures": None, "fresh": False,
-                   "ramp": True, "entrance_light": True, "fire_cabinet": False}
+                   "ramp": True, "entrance_light": True, "fire_cabinet": False, "cash": None}
 
 
 def survey(obj: StoreObject) -> dict:

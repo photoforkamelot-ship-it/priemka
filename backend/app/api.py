@@ -372,7 +372,7 @@ class Api:
             raise LookupError("в этом плане нечего подставлять")
         pr = p["parsed"]
         pas = pr.get("passport", {})
-        for k in ("grids", "ends", "coffee"):
+        for k in ("grids", "ends", "coffee", "cash"):
             if pas.get(k) is not None:
                 o.survey[k] = pas[k]
         if pr.get("luminaires"):
@@ -404,7 +404,7 @@ class Api:
     # ---------- опрос, этапы, недовозы, статусы, письмо ----------
     def put_survey(self, u, data, _b, oid):
         o = self._obj(oid, u)
-        allowed = {"coffee", "grids", "ends", "superstructures", "fresh", "ramp", "entrance_light", "fire_cabinet"}
+        allowed = {"coffee", "grids", "ends", "superstructures", "fresh", "ramp", "entrance_light", "fire_cabinet", "cash"}
         for k, v in data.items():
             if k in allowed:
                 o.survey[k] = v
@@ -419,7 +419,17 @@ class Api:
         for r in o.remarks:
             if r.item_ref:
                 refs.setdefault(r.item_ref, []).append({"id": r.id, "author": r.author_name, "status": r.status})
-        return _json({"stage1": CHECK["stage1"], "stage2": CHECK["stage2"], "statuses": CHECK["statuses"],
+        sv = norms_mod.survey(o)
+        cash = sv.get("cash") or next((p.get("parsed", {}).get("passport", {}).get("cash") for p in o.plans
+                                       if p.get("parsed", {}).get("passport", {}).get("cash")), None)
+        n = int(cash) if cash else None
+        stage2 = []
+        for z in CHECK["stage2"]:
+            if z["key"] == "e10":
+                fmt_ = {"cash": n if n else "N (по числу касс)", "scales": n + 1 if n else "N+1"}
+                z = {**z, "items": [x.format(**fmt_) for x in z["items"]], "cash": n}
+            stage2.append(z)
+        return _json({"stage1": CHECK["stage1"], "stage2": stage2, "statuses": CHECK["statuses"],
                       "albums": CHECK["photo_albums"], "module2": CHECK["coffee2_module"],
                       "checks": o.checks, "refs": refs, "state": o.statuses, "extras": o.extras, "survey": norms_mod.survey(o),
                       "lines": status_lines(o), "people": [p["name"] for p in rm.people_for(o)]})

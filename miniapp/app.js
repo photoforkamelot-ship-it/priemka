@@ -611,7 +611,9 @@
       return `<details class="zone ${complete ? "" : "todo"}" ${complete && !nrem ? "" : "open"} data-zone="${esc(z.zone)}">
         <summary><span class="st"><b>${esc(z.title)}</b><span>${done} из ${keys.length} пунктов${nrem ? ` · ${nrem} замеч.` : complete ? " · без замечаний" : ""}${complete ? "" : " · не проверено: " + (keys.length - done)}</span></span>
           ${complete ? `<span class="okdot">✓</span>` : `<span class="chev">▾</span>`}</summary>
-        <div class="items">${z.items.map((t, i) => {
+        <div class="items">${z.tips ? `<details class="tips"><summary>💡 На что смотреть</summary><ul>${z.tips.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></details>` : ""}
+          ${z.key === "e10" && !z.cash ? `<a class="note" href="#o/${id}/survey">Сколько касс? Укажите в опросе (или загрузите план монтажа) — посчитаю документы ›</a>` : ""}
+          ${z.items.map((t, i) => {
           const k = keys[i], ref = C.refs[k] || [], ch = C.checks[k];
           const state = ref.length ? "bad" : ch ? "ok" : "";
           return `<div class="it ${state || "un"}" data-k="${k}">
@@ -872,7 +874,7 @@
     render(`${(pas.discrepancies || []).length || pas.grids != null ? `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px">Из плана Кайтена</b><span class="sub" style="color:var(--fg)">${esc([pas.date && "план от " + pas.date, pas.grids != null && "сетки " + pas.grids, pas.ends != null && "торцы " + (pas.ends_note || pas.ends), pas.coffee && "кофестанция " + (pas.coffee === 2 ? "двойная" : "одна"), pas.cash && "кассы " + pas.cash].filter(Boolean).join(" · "))} — проверьте</span>
         ${(pas.discrepancies || []).map((d) => `<span class="chip warn" style="white-space:normal">⚠ ${esc(d)}</span>`).join("")}</div>` : ""}
       <div class="card"><span class="title" style="font-size:14px">Кофемашин</span>${segHtml("coffee", ["1 · обычная КС", "2 · двойная КС"], +s.coffee === 2 ? "2 · двойная КС" : "1 · обычная КС")}</div>
-      <div class="card" style="gap:0">${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", (pas.ends_note ? "вместе с торцом «Медицина»: " + pas.ends_note + " · " : "вместе с торцом «Медицина» · ") + "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
+      <div class="card" style="gap:0">${num("cash", "Касс", "из легенды плана монтажа · документы: N паспортов ККТ и ФН, весов — N+1")}${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", (pas.ends_note ? "вместе с торцом «Медицина»: " + pas.ends_note + " · " : "вместе с торцом «Медицина» · ") + "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
       <div class="card" style="gap:0">${tog("fresh", "Фреш-полка и кулинария")}${tog("ramp", "Пандус разгрузки")}${tog("entrance_light", "Подсветка входной группы")}${tog("fire_cabinet", "Пожарный шкаф")}</div>
       <div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px;color:var(--link)">Нормы пересчитаны</b>
         <span class="sub" style="color:var(--fg)">25. Сетка 250×1600 — ${mto[25] ?? "?"}<br>26. Сетка 1100×500 — ${mto[26] ?? "?"}<br>28. Ограничитель 500×60 — ${mto[28] ?? "?"}<br>76. Корзина для белья 40 л — ${mto[76]}<br>Расходники кофе — набор «${+s.coffee === 2 ? "двойная КС" : "одна КС"}»</span></div>
