@@ -30,8 +30,15 @@ def _err(msg, status=400) -> Response:
     return _json({"error": msg}, status)
 
 
+def _disp(kind: str, name: str) -> str:
+    """Имя файла в заголовке: латиница для старых клиентов + UTF-8 (кириллица в коде магазина ломала latin-1)."""
+    from urllib.parse import quote
+    ascii_ = name.encode("ascii", "replace").decode().replace("?", "_")
+    return f"{kind}; filename=\"{ascii_}\"; filename*=UTF-8''{quote(name)}"
+
+
 def _pdf(data: bytes, name: str) -> Response:
-    return 200, {"Content-Type": "application/pdf", "Content-Disposition": f'inline; filename="{name}"'}, data
+    return 200, {"Content-Type": "application/pdf", "Content-Disposition": _disp("inline", name)}, data
 
 
 _STORES: dict | None = None
@@ -109,8 +116,9 @@ class Api:
             (o + r"/letter/(first|update)", "GET", self.get_letter),
             (r"^/api/directory$", "GET", self.directory),
             (r"^/api/store/([^/]+)$", "GET", self.store_hint),
-            (o + r"/pdf/(konvert|dvornik)", "GET", self.get_pdf),
-            (o + r"/print/(konvert|dvornik|vcf)", "POST", self.send_to_chat),
+            (o + r"/pdf/(konvert|dvornik|ahchlist)", "GET", self.get_pdf),
+            (o + r"/print/(konvert|dvornik|vcf|ahchlist)", "POST", self.send_to_chat),
+            (o + r"/ahch-scan", "POST", self.ahch_scan),
             (o + r"/vcf", "GET", self.get_vcf),
             (o + r"/zones/(\d)", "GET", self.zones),
             (o + r"/zones/(\d)", "POST", self.zone_check),
@@ -510,16 +518,47 @@ class Api:
     # ---------- файлы ----------
     def get_pdf(self, u, _d, _b, oid, kind):
         o = self._obj(oid, u)
+        if kind == "ahchlist":
+            return _pdf(pdfs.readiness_list(o, rko=u.display), f"list-gotovnosti-{o.code}.pdf")
         if not o.director.phone or not o.director.name:
             raise ValueError("укажите ФИО и телефон директора в данных объекта")
         if kind == "konvert":
             return _pdf(pdfs.envelope_insert(o), f"konvert-{o.code}.pdf")
         return _pdf(pdfs.dvornik_poster(o), f"dvornik-{o.code}.pdf")
 
+    def ahch_scan(self, u, data, _b, oid):
+        """Скан или фото заполненного листа готовности → Диск → ссылка в письме. Повторная загрузка — «ОБНОВЛЁННЫЙ ЛИСТ»."""
+        o = self._obj(oid, u)
+        if data.get("remove"):
+            o.extras["ahch_in_letter"] = False
+            self.store.put(o)
+            return _json(o.extras)
+        if data.get("restore"):
+            o.extras["ahch_in_letter"] = True
+            self.store.put(o)
+            return _json(o.extras)
+        if not self.disk:
+            raise ValueError("Яндекс Диск не подключён")
+        files = data.get("files") or []
+        if not files:
+            raise ValueError("нет файла")
+        had = bool(o.extras.get("ahch_scan"))
+        ver = int(o.extras.get("ahch_ver") or 0) + 1
+        sub = f"Лист готовности АХЧ{'' if ver == 1 else ' — обновлённый ' + str(ver)}"
+        paths = []
+        for i, f in enumerate(files, 1):
+            ext = "pdf" if f.get("pdf") else "jpg"
+            paths.append(self.disk.upload(base64.b64decode(f["b64"]), o.code, "Фото для письма", f"Лист готовности_{i}.{ext}", sub=sub))
+        target = paths[0] if len(paths) == 1 else paths[0].rsplit("/", 1)[0]
+        o.extras.update({"ahch_scan": self.disk.public_url(target), "ahch_ver": ver, "ahch_updated": had,
+                         "ahch_in_letter": True, "ahch_date": date.today().isoformat()})
+        self.store.put(o)
+        return _json(o.extras)
+
     def get_vcf(self, u, _d, _b, oid):
         o = self._obj(oid, u)
         return 200, {"Content-Type": "text/vcard; charset=utf-8",
-                     "Content-Disposition": f'attachment; filename="kontakty-{o.code}.vcf"'}, vcf.for_object(o).encode()
+                     "Content-Disposition": _disp("attachment", f"kontakty-{o.code}.vcf")}, vcf.for_object(o).encode()
 
     def send_to_chat(self, u, _d, _b, oid, kind):
         """«На печать»: бот присылает файл в чат, дальше «Поделиться» → Kyocera."""
@@ -531,7 +570,9 @@ class Api:
         else:
             st, _h, data = self.get_pdf(u, None, None, oid, kind)
             name = f"{kind}-{o.code}.pdf"
-            cap = "На печать: книжная, 1 копия → «Поделиться» → Kyocera Mobile Print"
+            cap = ("Лист готовности АХЧ: двусторонняя, книжная, 1 копия → «Поделиться» → Kyocera Mobile Print. "
+                   "Заполняется и подписывается на приёмке, потом — фото или скан в приложение") if kind == "ahchlist" else \
+                "На печать: книжная, 1 копия → «Поделиться» → Kyocera Mobile Print"
         self.sender.send_document(u.id, name, data, cap)
         return _json({"sent": True})
 

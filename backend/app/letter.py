@@ -334,20 +334,33 @@ def build(obj: StoreObject, mode: str = "first", today: date | None = None) -> d
                   app=f'<a href="{esc(url or "#")}" data-album="{key}" data-title="{esc(title)}"><b>{esc(title)}</b></a>'
                       + ("" if url else ' <span class="nophoto">нет фото — нажмите</span>'))
         hu, hr = ex.get("height_unloading"), ex.get("height_ramp")
-        if hu or hr:
+        if hu or hr or s.get("ramp") is False:
             parts = []
             if hu:
                 parts.append(f"ВЫСОТА ПРОЁМА РАЗГРУЗКИ – {hu}М")
-            if hr and s.get("ramp", True):
+            if s.get("ramp") is False:
+                parts.append("ВЫСОТА ПАНДУСА (ПАНДУСА НЕ ПРЕДУСМОТРЕНО)")
+            elif hr:
                 parts.append(f"ВЫСОТА ПАНДУСА – {hr}М")
             doc.p("<b>" + esc(";".join(parts)) + "</b>", ";".join(parts))
         doc.blank()
         for st in status_lines(obj):
             doc.p(f"●&nbsp;&nbsp;&nbsp;{st['html']}", f"● {st['text']}", indent=True, app=f"●&nbsp;&nbsp;&nbsp;{st.get('html_app') or st['html']}")
-        if ex.get("ahch_scan"):
-            doc.blank()
-            doc.p(f'<a href="{esc(ex["ahch_scan"])}"><b>ЛИСТ ГОТОВНОСТИ (АХЧ)</b></a>', f"ЛИСТ ГОТОВНОСТИ (АХЧ) {ex['ahch_scan']}")
+        ahch_line(doc, ex)
+    else:
+        ahch_line(doc, ex, updated_only=True)
     return _out(obj, doc, items, bg)
+
+
+def ahch_line(doc, ex: dict, updated_only: bool = False):
+    """Ссылка на скан листа готовности; после замены — «ОБНОВЛЁННЫЙ ЛИСТ ГОТОВНОСТИ (АХЧ)». Можно убрать из письма."""
+    url = ex.get("ahch_scan")
+    if not url or ex.get("ahch_in_letter") is False or (updated_only and not ex.get("ahch_updated")):
+        return
+    title = "ОБНОВЛЁННЫЙ ЛИСТ ГОТОВНОСТИ (АХЧ)" if ex.get("ahch_updated") else "ЛИСТ ГОТОВНОСТИ (АХЧ)"
+    doc.blank()
+    doc.p(f'<a href="{esc(url)}"><b>{title}</b></a>', f"{title} {url}",
+          app=f'<a href="{esc(url)}" data-ahch="1"><b>{title}</b></a>')
 
 
 def batteries_line(obj: StoreObject) -> str:

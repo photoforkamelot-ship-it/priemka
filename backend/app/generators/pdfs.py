@@ -83,3 +83,41 @@ def dvornik_poster(obj: StoreObject, template: Path = ASSETS / "templates" / "ob
     tw.append((x + fr.text_length(pre, fontsize=size), y), addr, font=fb, fontsize=size)
     tw.write_text(p)
     return d.tobytes(garbage=3, deflate=True)
+
+
+def readiness_list(obj: StoreObject, rko: str = "", day: str = "") -> bytes:
+    """Лист контроля готовности (АХЧ) из шаблона: дата приёмки, магазин и адрес под заголовком,
+    координатор, специалист АХЧ и РКО — внизу второго листа. Остальное заполняется ручкой на приёмке."""
+    from datetime import date as _d
+    d = pymupdf.open(ASSETS / "templates" / "list-gotovnosti-ahch.pdf")
+    R = pymupdf.Font(fontfile=str(F / "LiberationSans-Regular.ttf"))
+    Bf = pymupdf.Font(fontfile=str(F / "LiberationSans-Bold.ttf"))
+
+    def put(page, x, y, txt, font, size, maxw=None, white=None):
+        if maxw:
+            while font.text_length(txt, fontsize=size) > maxw and size > 6:
+                size -= 0.25
+        if white:
+            page.draw_rect(white, color=None, fill=(1, 1, 1), overlay=True)
+        tw = pymupdf.TextWriter(page.rect)
+        tw.append((x, y), txt, font=font, fontsize=size)
+        tw.write_text(page)
+
+    p0 = d[0]
+    when = day or (obj.accept_date.isoformat() if obj.accept_date else "")
+    hit = p0.search_for("__.__")
+    if when and hit:
+        r = hit[0]
+        dt = _d.fromisoformat(when)
+        put(p0, r.x0, r.y1 - 2, f"{dt:%d.%m.%Y} г.", Bf, 10, white=pymupdf.Rect(r.x0 - 1, r.y0, r.x0 + 60, r.y1 + 1))
+    put(p0, 20, 86, f"Магазин {obj.code} · {obj.full_address}" + (f" · открытие {obj.open_date:%d.%m.%Y}" if obj.open_date else ""),
+        Bf, 8.5, maxw=p0.rect.width - 40)
+    if len(d) > 1:
+        p1 = d[-1]
+        for label, val in (("КООРДИНАТОР СТРОИТЕЛЬСТВА", obj.coordinator.name), ("СПЕЦИАЛИСТ АХЧ", obj.ahch_curator.name), ("РКО:", rko)):
+            hits = p1.search_for(label)
+            if hits and val:
+                r = hits[0]
+                x = r.x1 + (14 if label != "РКО:" else 8)
+                put(p1, x, r.y1 - 2.2, val, R, 9.5, maxw=230)
+    return d.tobytes(garbage=3, deflate=True)

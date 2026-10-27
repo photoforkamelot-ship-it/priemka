@@ -332,6 +332,7 @@
       ${don.director_phone ? `<a class="btn small" href="tel:${tel(don.director_phone)}">📞 ${esc(don.director_phone)}</a>` : ""}` : "";
     before(20, `<div class="pform">${pf("trainer", tr, "Тренер по региону")}${pf("ahch_curator", cu, "Куратор АХЧ в регионе")}
       <div class="pfield"><b>Размен — из какого магазина</b><input data-donor value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">${donorH}</div></div>`);
+    before(21, `<div class="btns"><button class="small" data-print="ahchlist">🖨 Лист готовности на печать</button><a class="btn small ghost" href="#o/${id}/walk/3">Скан — в «Обход → Этап 3»</a></div>`);
     before(21, cu.name || cu.phone ? `<div class="row"><span><b>${esc(cu.name || "Куратор АХЧ")}</b></span>${cu.phone ? `<a class="btn small main" href="tel:${tel(cu.phone)}">📞 Позвонить</a>` : ""}</div>`
       : `<div class="note">Контакт куратора — у тренера по региону. Внесите его в пункте ☎ выше.</div>`);
     // 1 — размен: магазин-донор из пункта ☎
@@ -389,6 +390,7 @@
       try { await api("POST", `/api/objects/${id}/firstday/${cb.dataset.k}`, { done: cb.checked }); } catch (e) { toast(e.message); }
     }));
     $app.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => copy(document.getElementById(b.dataset.copy).textContent)));
+    $app.querySelectorAll("[data-print]").forEach((b) => (b.onclick = () => printToChat(id, b.dataset.print)));
     const savePrep = async (d) => { try { await api("PUT", `/api/objects/${id}`, d); toast("Сохранено"); prep(id); } catch (e) { toast(e.message); } };
     $app.querySelectorAll("[data-pk]").forEach((inp) => (inp.onchange = () => savePrep({ [inp.dataset.pk]: { [inp.dataset.pf]: inp.value.trim() } })));
     $app.querySelectorAll("[data-hint]").forEach((b) => (b.onclick = () => savePrep({ [b.dataset.hint]: H[b.dataset.hint] })));
@@ -528,6 +530,29 @@
       <div class="list"><a href="${MEMO}instr/dvornik/dvornik.html"><span class="t"><b>Инструкция: договор и акт в МК</b><span>с картинками и PDF</span></span><span class="go">›</span></a></div>`);
     $app.querySelectorAll("[data-print]").forEach((b) => (b.onclick = () => printToChat(id, b.dataset.print)));
   }
+  // ---------- лист готовности АХЧ: печать шаблона и скан заполненного ----------
+  const b64file = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onerror = rej; r.onload = () => res(String(r.result).split(",")[1]); r.readAsDataURL(f); });
+  function ahchHtml(ex) {
+    const url = ex.ahch_scan, inL = ex.ahch_in_letter !== false;
+    return `<div class="card" id="ahchCard"><span class="title">Лист готовности (АХЧ)</span>
+      <span class="sub">Печатаем шаблон с кодом, адресом, датой и фамилиями → заполняем ручкой на приёмке, подписывают все → фото или скан сюда. Ссылка встанет в первое письмо${url ? "; повторная загрузка — «ОБНОВЛЁННЫЙ ЛИСТ ГОТОВНОСТИ»" : ""}.</span>
+      ${url ? `<span class="row"><span class="chip ${inL ? "ok" : "warn"}">${inL ? (ex.ahch_updated ? "обновлённый · в письме" : "загружен · в письме") : "загружен · убран из письма"}</span><a class="btn small ghost" href="${esc(url)}">Открыть скан</a></span>` : `<span class="chip warn">скан не загружен</span>`}
+      <div class="btns"><button class="small" id="ahPrint">🖨 Шаблон на печать</button>
+        <label class="btn small ${url ? "" : "main"}">📷 ${url ? "Заменить скан" : "Загрузить скан / фото"}<input type="file" accept="image/*,application/pdf" multiple hidden id="ahFile"></label>
+        ${url ? `<button class="small ghost" id="ahToggle">${inL ? "Убрать из письма" : "Вернуть в письмо"}</button>` : ""}</div></div>`;
+  }
+  function bindAhch(id, ex, again) {
+    const pr = document.getElementById("ahPrint"); if (!pr) return;
+    pr.onclick = () => printToChat(id, "ahchlist");
+    document.getElementById("ahFile").onchange = async (e) => {
+      const files = [];
+      for (const f of e.target.files) files.push(/pdf/i.test(f.type) ? { b64: await b64file(f), pdf: true } : { b64: await shrink(f, 2400) });
+      try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/ahch-scan`, { files }); toast("Лист готовности на Диске — ссылка в письме"); again(); } catch (er) { toast(er.message); }
+    };
+    const tg2 = document.getElementById("ahToggle");
+    if (tg2) tg2.onclick = async () => { await api("POST", `/api/objects/${id}/ahch-scan`, ex.ahch_in_letter !== false ? { remove: true } : { restore: true }); again(); };
+  }
+
   async function printToChat(id, kind) {
     try { await api("POST", `/api/objects/${id}/print/${kind}`); toast("Файл отправлен в чат с ботом"); if (tg) setTimeout(() => tg.close(), 1200); }
     catch (e) { toast(e.message); }
@@ -758,7 +783,7 @@
         ${(() => { const two = +(C.survey.coffee || 1) === 2, list = (two ? C.module2.deliver : []).concat(C.module2.have);
           return `<div class="card"><span class="title">Кофестанция · ${two ? "2-й модуль" : "1 модуль"}</span><span class="sub">Галочка — есть в наличии (зелёным в письме). Снята — ${two ? "к довозу / " : ""}оранжевым «НЕ В НАЛИЧИИ»</span>
           ${list.map((x) => `<label class="tick" style="font-weight:500"><input type="checkbox" data-m2="${esc(x)}" ${m2[x] ?? C.module2.have.includes(x) ? "checked" : ""}> ${esc(x)}</label>`).join("")}</div>`; })()}
-        <div class="card"><span class="title">Лист готовности (АХЧ)</span><span class="sub">Ссылка на скан — для первого письма</span><input id="ahs" value="${esc(ex.ahch_scan || "")}" placeholder="https://disk.yandex.ru/…"></div>`;
+        ${ahchHtml(ex)}`;
     }
     render(tabsH + body + `<a class="btn main" href="#o/${id}/letter/first">К письму →</a>`);
     $app.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { S3.tab = b.dataset.tab; S3.mark = false; stage3(id); }));
@@ -811,7 +836,7 @@
       pm.querySelectorAll("button").forEach((b) => (b.onclick = async () => { const v = Math.max(0, +pm.querySelector("b").textContent + +b.dataset.d); pm.querySelector("b").textContent = v; await api("PUT", `/api/objects/${id}/extras`, { pumps: v }); }));
       document.getElementById("hu").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { height_unloading: e.target.value.trim() });
       document.getElementById("hr").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { height_ramp: e.target.value.trim() });
-      document.getElementById("ahs").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { ahch_scan: e.target.value.trim() });
+      bindAhch(id, ex, () => stage3(id));
       $app.querySelectorAll("[data-m2]").forEach((c) => (c.onchange = async () => { const m = { ...(ex.module2 || {}) }; m[c.dataset.m2] = c.checked; ex.module2 = m; await api("PUT", `/api/objects/${id}/extras`, { module2: m }); }));
     }
   }
@@ -899,6 +924,7 @@
       ${editor}
       <div class="group">${mode === "first" ? "Письмо в вёрстке шаблона" : "Апдейт — предпросмотр"}</div>
       <div class="paper" id="paper">${L.html_app}</div>
+      ${mode === "first" || ex.ahch_scan ? ahchHtml(ex) : ""}
       <details class="card"><summary class="title" style="cursor:pointer">Получатели · ${1 + L.cc.length}</summary>
         <span class="sub"><b>Кому:</b> ${L.to.map(([n, e]) => esc(n) + " &lt;" + esc(e) + "&gt;").join(", ")}</span>
         <span class="sub"><b>Копия:</b> ${L.cc.map(([n, e]) => esc(n) + " &lt;" + esc(e) + "&gt;").join(", ")}</span>
@@ -912,6 +938,7 @@
     document.getElementById("cpTo").onclick = () => copy(L.to.concat(L.cc).map((x) => x[1]).join("; "));
     document.getElementById("cpSubj").onclick = () => copy(L.subject);
     document.getElementById("shg").onchange = async (e) => { await api("PUT", `/api/objects/${id}/extras`, { show_received: e.target.checked }); letterScreen(id, mode); };
+    bindAhch(id, ex, () => letterScreen(id, mode));
     // фото-разделы и строки статусов с фото: нажатие — открыть фото или догрузить прямо отсюда
     const cnt = ex.album_count || {};
     document.getElementById("paper").addEventListener("click", (e) => {
