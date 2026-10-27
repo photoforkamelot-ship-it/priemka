@@ -178,10 +178,16 @@
       <div id="storeHint"></div>
       <label class="f">Округ</label>${segHtml("okrug", ["СФО", "УФО", "ЦФО"], o.okrug || "СФО")}
       <div class="grid2"><label class="f">Приёмка<input type="date" name="accept_date" value="${o.accept_date || ""}"></label>
-      <label class="f">Открытие<input type="date" name="open_date" value="${o.open_date || ""}"></label></div>
+      <label class="f">Открытие <span class="sub">(приёмка + 4 дня)</span><input type="date" name="open_date" value="${o.open_date || ""}"></label></div>
       <label class="f">День заказа размена, печати, доверенности<input type="date" name="razmen_date" value="${(o.flags || {}).razmen_date || ""}"></label>
       <label class="f">Почта магазина<input name="store_email" type="email" value="${esc(o.store_email)}" placeholder="PR22@ya-retail.ru"></label>
       <datalist id="dl-cities">${(d.cities || []).map((c) => `<option value="${esc(c)}">`).join("")}</datalist></div>`;
+  }
+  function bindDates() {
+    const a = field("accept_date"), b = field("open_date"); if (!a || !b) return;
+    a.addEventListener("change", () => { if (!a.value || (b.value && b.dataset.auto !== "1")) return;
+      const [y, m, dd] = a.value.split("-").map(Number); b.value = new Date(Date.UTC(y, m - 1, dd + 4)).toISOString().slice(0, 10); b.dataset.auto = "1"; });
+    b.addEventListener("input", () => (b.dataset.auto = "0"));
   }
   const field = (n) => $app.querySelector(`[name="${n}"]`);
   /** По коду магазина — подсказка из справочника магазинов (существующий магазин) или по похожим кодам (округ, город, почта). */
@@ -215,6 +221,8 @@
     coordinator: { title: "Координатор строительства", match: (p) => /Координатор/.test(p.role) },
     dev_manager: { title: "Менеджер по развитию региона", match: (p) => /менеджер по развитию/i.test(p.role) },
     mops_contractor: { title: "Подрядчик МОПы и ковры (ЦФО)", match: (p) => /МОП/.test(p.role), phone: true },
+    trainer: { title: "Тренер по региону — у него куратор АХЧ и где брать размен", match: (p) => /тренер/i.test(p.role), phone: true },
+    ahch_curator: { title: "Куратор службы АХЧ в регионе — звоним, чтобы был на приёмке", match: (p) => /АХЧ/.test(p.role), phone: true },
   };
   function personBlock(key, v, d, o) {
     const r = ROLES[key];
@@ -258,9 +266,9 @@
     const d = await directory();
     top({ back: ["#objects", "Объекты"], title: "Новый объект", extra: `<span class="sub">Вводится один раз — подставляется в письма, заявки, объявление, конверт и контакты</span>` });
     render(`${storeCard({}, d)}
-      <div class="card"><span class="title">Люди объекта</span>${personBlock("director", {}, d, {})}</div>
+      <div class="card"><span class="title">Люди объекта</span>${personBlock("director", {}, d, {})}${personBlock("trainer", {}, d, {})}${personBlock("ahch_curator", {}, d, {})}</div>
       <div class="bottom"><button class="main" id="save">Создать объект</button></div>`);
-    bindSeg("okrug"); bindStoreHint(); bindPeople(d);
+    bindSeg("okrug"); bindStoreHint(); bindPeople(d); bindDates();
     document.getElementById("save").onclick = async () => {
       const f = readForm(); if (!f.code) return toast("Укажите код магазина");
       try { const o = await api("POST", "/api/objects", f); toast("Объект создан"); location.hash = `#o/${o.id}/data`; } catch (e) { toast(e.message); }
@@ -270,18 +278,22 @@
   async function dataScreen(id) {
     const [o, d] = await Promise.all([api("GET", `/api/objects/${id}`), directory()]);
     top({ back: ["#objects", "Объекты"], cap: objLine(o), title: "Данные объекта", tabs: [id, "data"] });
-    const keys = ["director", "coordinator", "dev_manager"].concat(o.okrug === "ЦФО" ? ["mops_contractor"] : []);
+    const keys = ["director", "coordinator", "dev_manager", "trainer", "ahch_curator"].concat(o.okrug === "ЦФО" ? ["mops_contractor"] : []);
+    const don = o.razmen_donor || {};
     render(`${o.missing_people.length ? `<div class="card warnc"><b>Не заполнено: ${o.missing_people.length}</b><span class="sub">${esc(o.missing_people.join(", "))}</span></div>` : ""}
       ${storeCard(o, d)}
       <div class="card"><span class="title">Люди объекта</span><span class="sub">Подсказки — из справочника; ответственного выбираете вы</span>
         ${keys.map((k) => personBlock(k, o[k] || {}, d, o)).join("")}</div>
+      <div class="card"><span class="title">Размен — из какого магазина</span><span class="sub">Узнайте у тренера. По коду подтянутся адрес, директор и телефон из справочника</span>
+        <input id="donor" value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">
+        ${don.code ? `<span class="sub">${esc([don.address, don.director && "директор " + don.director, don.director_phone].filter(Boolean).join(" · ") || "в справочнике не найден")}</span>` : ""}</div>
       <label class="card tick"><input type="checkbox" id="dv" ${o.flags.dvornik_hired ? "checked" : ""}> Дворник оформлен — напоминать про акт в конце месяца</label>
       <div class="card" style="background:var(--accent-soft);border:0"><span class="title" style="font-size:14px">Региональные — ${esc(o.okrug)}</span><span class="sub">${REGIONAL[o.okrug] || ""}</span></div>
       <button id="vcf">Контакты объекта в чат (.vcf)</button>
       <div class="bottom"><button class="main" id="save">Сохранить</button></div>`);
-    bindSeg("okrug"); bindStoreHint(); bindPeople(d);
+    bindSeg("okrug"); bindStoreHint(); bindPeople(d); bindDates();
     document.getElementById("save").onclick = async () => {
-      try { await api("PUT", `/api/objects/${id}`, { ...readForm(), dvornik_hired: document.getElementById("dv").checked }); DIR = null; toast("Сохранено"); location.hash = `#o/${id}`; } catch (e) { toast(e.message); }
+      try { await api("PUT", `/api/objects/${id}`, { ...readForm(), dvornik_hired: document.getElementById("dv").checked, razmen_donor: { code: document.getElementById("donor").value.trim().toUpperCase() } }); DIR = null; toast("Сохранено"); location.hash = `#o/${id}`; } catch (e) { toast(e.message); }
     };
     document.getElementById("vcf").onclick = () => printToChat(id, "vcf");
   }
@@ -309,6 +321,21 @@
     setText("#grpName", T.whatsapp_group); setText("#sign", T.outlook_signature); setText("#mopTpl", T.mops);
     const body = (n) => item(n) && item(n).querySelector(".body");
     const before = (n, html) => { const b = body(n); if (b) b.querySelector("label.done").insertAdjacentHTML("beforebegin", html); };
+    // ☎ тренер: куратор АХЧ и магазин для размена — вносятся здесь и расходятся по пунктам и напоминаниям
+    const tel = (p) => (p || "").replace(/[^\d+]/g, "");
+    const H = o.hints || {}, tr = o.trainer || {}, cu = o.ahch_curator || {}, don = o.razmen_donor || {};
+    const pf = (k, p, lbl) => `<div class="pfield"><b>${lbl}</b><div class="grid2"><input data-pk="${k}" data-pf="name" value="${esc(p.name || "")}" placeholder="ФИО">
+      <input data-pk="${k}" data-pf="phone" inputmode="tel" value="${esc(p.phone || "")}" placeholder="телефон"></div>
+      ${p.phone ? `<a class="btn small" href="tel:${tel(p.phone)}">📞 ${esc(p.phone)}</a>` : ""}
+      ${!p.name && H[k] ? `<button class="small ghost" data-hint="${k}">Как в прошлом объекте: ${esc(H[k].name)} ${esc(H[k].phone || "")} — подставить</button>` : ""}</div>`;
+    const donorH = don.code ? `<div class="sub"><b>${esc(don.code)}</b>${don.address ? " · " + esc(don.address) : ""}${don.director ? " · директор " + esc(don.director) : ""}</div>
+      ${don.director_phone ? `<a class="btn small" href="tel:${tel(don.director_phone)}">📞 ${esc(don.director_phone)}</a>` : ""}` : "";
+    before(20, `<div class="pform">${pf("trainer", tr, "Тренер по региону")}${pf("ahch_curator", cu, "Куратор АХЧ в регионе")}
+      <div class="pfield"><b>Размен — из какого магазина</b><input data-donor value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">${donorH}</div></div>`);
+    before(21, cu.name || cu.phone ? `<div class="row"><span><b>${esc(cu.name || "Куратор АХЧ")}</b></span>${cu.phone ? `<a class="btn small main" href="tel:${tel(cu.phone)}">📞 Позвонить</a>` : ""}</div>`
+      : `<div class="note">Контакт куратора — у тренера по региону. Внесите его в пункте ☎ выше.</div>`);
+    // 1 — размен: магазин-донор из пункта ☎
+    if (don.code) before(1, `<div class="card" style="gap:4px"><b>Размен из ${esc(don.code)}</b>${donorH}</div>`);
     // 1 — размен: доступ к кассе отдельной галкой (на неё смотрят напоминания бота)
     before(1, `<label class="done"><input type="checkbox" data-k="cash"> Доступ к кассе получен</label>`);
     // 3 — кнопки «На печать» пока нет
@@ -362,6 +389,10 @@
       try { await api("POST", `/api/objects/${id}/firstday/${cb.dataset.k}`, { done: cb.checked }); } catch (e) { toast(e.message); }
     }));
     $app.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = () => copy(document.getElementById(b.dataset.copy).textContent)));
+    const savePrep = async (d) => { try { await api("PUT", `/api/objects/${id}`, d); toast("Сохранено"); prep(id); } catch (e) { toast(e.message); } };
+    $app.querySelectorAll("[data-pk]").forEach((inp) => (inp.onchange = () => savePrep({ [inp.dataset.pk]: { [inp.dataset.pf]: inp.value.trim() } })));
+    $app.querySelectorAll("[data-hint]").forEach((b) => (b.onclick = () => savePrep({ [b.dataset.hint]: H[b.dataset.hint] })));
+    const dn = $app.querySelector("[data-donor]"); if (dn) dn.onchange = () => savePrep({ razmen_donor: { code: dn.value.trim().toUpperCase() } });
     const ip = document.getElementById("ipIn"), out = document.getElementById("ipOut");
     if (ip) ip.oninput = () => { const p = ip.value.trim().split("."); out.textContent = p.length === 4 ? p.slice(0, 3).join(".") + ".20" : "—"; };
     const key = "open:" + id;

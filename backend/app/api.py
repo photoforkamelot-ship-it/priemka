@@ -9,7 +9,7 @@ import json
 import os
 import re
 from dataclasses import asdict
-from datetime import date
+from datetime import date, timedelta
 
 from . import firstday, remarks as rm
 from . import norms as norms_mod
@@ -153,6 +153,16 @@ class Api:
         o = self._obj(oid, u)
         d = o.to_dict()
         d["missing_people"] = o.missing_people()
+        # подсказки из прошлых объектов того же города (не подставляются сами — руководитель подтверждает)
+        hints = {}
+        for x in self.store.list_for(u.id):
+            if x.id == o.id or not o.city or x.city != o.city:
+                continue
+            for k in ("trainer", "ahch_curator"):
+                p = getattr(x, k)
+                if p.name and k not in hints:
+                    hints[k] = asdict(p)
+        d["hints"] = hints
         return _json(d)
 
     def update_object(self, u, data, _b, oid):
@@ -171,12 +181,21 @@ class Api:
         for k in ("accept_date", "open_date"):
             if k in d:
                 setattr(o, k, date.fromisoformat(d[k]) if d[k] else None)
-        for k in ("director", "coordinator", "dev_manager", "mops_contractor"):
+        for k in ("director", "coordinator", "dev_manager", "mops_contractor", "trainer", "ahch_curator"):
             if k in d and isinstance(d[k], dict):
                 setattr(o, k, Person(**{**asdict(getattr(o, k)), **d[k]}))
-        for k in ("razmen_date",):
+        for k in ("razmen_date", "incass_days", "ahch_notified_on"):
             if k in d:
                 o.flags[k] = d[k]
+        if "razmen_donor" in d:
+            don = d["razmen_donor"] or {}
+            code = (don.get("code") or "").strip().upper()
+            hit = next((x for x in _stores()["stores"] if x["code"] == code), None) if code else None
+            o.razmen_donor = {"code": code, **({k: hit.get(k, "") for k in ("address", "director", "director_phone", "email")} if hit else {}),
+                              **{k: v for k, v in don.items() if k != "code" and v}}
+        # дата открытия по умолчанию — приёмка + 4 дня
+        if o.accept_date and not o.open_date:
+            o.open_date = o.accept_date + timedelta(days=4)
         for k in ("dvornik_hired",):
             if k in d:
                 o.flags[k] = bool(d[k])

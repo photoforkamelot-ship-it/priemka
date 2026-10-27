@@ -105,6 +105,9 @@ class StoreObject:
     coordinator: Person = field(default_factory=Person)
     dev_manager: Person = field(default_factory=Person)     # менеджер по развитию региона
     mops_contractor: Person = field(default_factory=Person)  # только ЦФО
+    trainer: Person = field(default_factory=Person)          # тренер по региону: у него — куратор АХЧ и где брать размен
+    ahch_curator: Person = field(default_factory=Person)     # куратор службы АХЧ в регионе — звоним, чтобы был на приёмке
+    razmen_donor: dict = field(default_factory=dict)         # магазин, откуда размен: {code, address, director, director_phone}
     owner_tg: int = 0
     team_tg: list[int] = field(default_factory=list)
     contracts: dict[str, ContractSlot] = field(default_factory=lambda: {s: ContractSlot(s) for s in CONTRACT_SLOTS})
@@ -151,7 +154,7 @@ class StoreObject:
     @classmethod
     def from_dict(cls, d: dict) -> "StoreObject":
         d = dict(d)
-        for k in ("director", "coordinator", "dev_manager", "mops_contractor"):
+        for k in ("director", "coordinator", "dev_manager", "mops_contractor", "trainer", "ahch_curator"):
             d[k] = Person(**(d.get(k) or {}))
         d["remarks"] = [Remark(**{**r, "comments": [Comment(**c) for c in r.get("comments", [])]})
                         for r in d.get("remarks") or []]

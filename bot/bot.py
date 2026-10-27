@@ -40,8 +40,8 @@ class Sender:
     def _btn(self, title: str, action: str) -> dict:
         if action.startswith("tel:"):
             return {"text": f"{title} {action[4:]}", "callback_data": "noop"}
-        if action.startswith(("open:", "memo:", "print:")) and self.app_url:
-            return {"text": title, "web_app": {"url": f"{self.app_url}#{action.replace(':', '/')}"}}
+        if action.startswith("open:") and self.app_url:
+            return {"text": title, "web_app": {"url": f"{self.app_url}/#{action[5:]}"}}
         return {"text": title, "callback_data": action[:64]}
 
 
@@ -66,13 +66,27 @@ def handle_update(update: dict, sender: Sender, store: Store) -> None:
                 sender.send_text(uid, "Отметил ✅")
 
 
+ROUTES = {"open:prep": "o/{id}", "open:contracts": "o/{id}/contracts", "open:object": "o/{id}/data",
+          "open:letter": "o/{id}/letter/first", "open:update": "o/{id}/letter/update", "open:walk2": "o/{id}/walk/2",
+          "open:walk3": "o/{id}/walk/3", "open:ahch": "o/{id}/ahch", "memo:dvornik": "o/{id}/dvornik", "open:objects": "objects"}
+
+
+def route(action: str, oid: str) -> str:
+    """Кнопка напоминания: экран приложения этого объекта, отметка «сделано» или звонок."""
+    if action.startswith(("done:", "snooze:", "print:")) or action == "cash_wait":
+        return f"{action}|{oid}"
+    if action in ROUTES:
+        return "open:" + ROUTES[action].format(id=oid)
+    return action
+
+
 def daily(store: Store, sender: Sender, today: date | None = None) -> int:
     """Запускается таймером раз в день (утром по местному времени)."""
     today = today or datetime.now(timezone(timedelta(hours=5))).date()
     n = 0
     for o in store.all():
         for r in firstday.reminders(o, today):
-            buttons = [(t, f"{a}|{o.id}" if a.startswith("done:") else a) for t, a in r.buttons]
+            buttons = [(t, route(a, o.id)) for t, a in r.buttons]
             for uid in {o.owner_tg, *o.team_tg}:
                 if uid:
                     sender.send_text(uid, f"<b>{o.code}</b> · {r.text}", buttons)

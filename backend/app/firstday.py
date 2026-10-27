@@ -22,7 +22,7 @@ MEMO_ITEMS = 19          # пункты памятки «Не забывай» =
 
 
 def memo_keys(obj: StoreObject) -> list[str]:
-    return [f"m{i}" for i in range(1, MEMO_ITEMS + 1) if i != 16 or obj.okrug == "ЦФО"]
+    return ["m20", "m21"] + [f"m{i}" for i in range(1, MEMO_ITEMS + 1) if i != 16 or obj.okrug == "ЦФО"]
 
 
 def first_day(obj: StoreObject) -> list[Step]:
@@ -82,6 +82,19 @@ def reminders(obj: StoreObject, today: date) -> list[Reminder]:
             if who.phone:
                 btns.insert(0, ("Позвонить", f"tel:{who.phone}"))
         out.append(Reminder("contracts", f"Не хватает договоров: {names}.", btns))
+    if acc and not obj.first_day_done.get("m20") and today < acc:
+        if not obj.trainer.filled or not obj.ahch_curator.filled or not obj.razmen_donor.get("code"):
+            miss = [n for n, ok in (("куратора АХЧ", obj.ahch_curator.filled), ("магазин для размена", bool(obj.razmen_donor.get("code")))) if not ok]
+            btns = [("Открыть пункт", "open:prep")]
+            if obj.trainer.phone:
+                btns.insert(0, ("Позвонить тренеру", f"tel:{obj.trainer.phone}"))
+            out.append(Reminder("trainer", "Позвоните тренеру по региону: узнайте " + " и ".join(miss or ["контакты"]) + ".", btns))
+    if acc and not obj.first_day_done.get("m21") and today in (acc - timedelta(days=3), acc - timedelta(days=1)):
+        btns = [("Уведомил", "done:m21"), ("Открыть пункт", "open:prep")]
+        if obj.ahch_curator.phone:
+            btns.insert(0, (f"Позвонить {obj.ahch_curator.first_name or 'куратору'}", f"tel:{obj.ahch_curator.phone}"))
+        out.append(Reminder("ahch_notify", f"Приёмка {acc.strftime('%d.%m')}. Позвоните куратору АХЧ"
+                            + (f" ({obj.ahch_curator.name})" if obj.ahch_curator.name else "") + " — чтобы был на приёмке и подписал лист готовности.", btns))
     created = obj.flags.get("created")
     if created and today == date.fromisoformat(created) + timedelta(days=1) and obj.missing_people():
         out.append(Reminder("people", "Не заполнено в данных объекта: " + ", ".join(obj.missing_people()) + ".",
