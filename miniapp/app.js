@@ -29,6 +29,7 @@
   }
   // ---------- отклик: вибрация (Telegram) и короткий звук ----------
   const HAP = tg && tg.HapticFeedback;
+  let voiceOn = true; try { voiceOn = localStorage.getItem("voice") !== "off"; } catch (e) {}
   let soundOn = true; try { soundOn = localStorage.getItem("sound") !== "off"; } catch (e) {}
   let AC = null;
   function tone(notes) {
@@ -147,6 +148,7 @@
   }
   async function objects() {
     const list = await api("GET", "/api/objects");
+    setTimeout(() => { const v = document.getElementById("vce"); if (v) v.onchange = () => { voiceOn = v.checked; try { localStorage.setItem("voice", voiceOn ? "on" : "off"); } catch (e) {} }; }, 0);
     setTimeout(() => { const c = document.getElementById("snd"); if (c) c.onchange = () => { soundOn = c.checked; try { localStorage.setItem("sound", soundOn ? "on" : "off"); } catch (e) {} if (soundOn) fx.ok(); }; }, 0);
     top({ cap: "Команда открытия", title: "Мои объекты", right: `<a class="btn small main" href="#new">+ Объект</a>` });
     render(`${list.length ? "" : `<div class="empty"><b>Объектов пока нет</b><span>Создайте объект — данные подставятся в письма, заявки, объявление и конверт.</span><a class="btn main" href="#new">+ Новый объект</a></div>`}
@@ -159,6 +161,7 @@
         <div class="bar"><i style="width:${(o.firstday_done / o.firstday_total) * 100}%"></i></div></a>`).join("")}
       <div class="group">Справка</div>
       <label class="card tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="snd" ${soundOn ? "checked" : ""}> Звук нажатий и сохранений (вибрация — всегда)</label>
+      <label class="card tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="vce" ${voiceOn ? "checked" : ""}> Кнопка «🎤 Голосом» в замечаниях</label>
       <div class="list"><a href="#instr"><span class="t"><b>Инструкции</b><span>МК, ЯК, ЛМК, приём на работу, форма, дворник, покупюрник</span></span><span class="go">›</span></a></div>`);
   }
 
@@ -1048,8 +1051,72 @@
   function statusChip(s) {
     return { open: "", fixed: `<span class="chip warn">исправлено, ждёт подтверждения</span>`, accepted: `<span class="chip ok">принято</span>`, fixed_on_site: `<span class="chip ok">устранено в ходе приёмки</span>` }[s] || "";
   }
+  // ---------- типовые формулировки, ответственный по словам, голос ----------
+  let PHRASES = null;
+  async function phrases() { if (PHRASES) return PHRASES; try { PHRASES = await (await fetch("phrases.json?v=1")).json(); } catch (e) { PHRASES = []; } return PHRASES; }
+  const stem = (w) => w.toLowerCase().replace(/ё/g, "е").slice(0, 5);
+  function suggestPhrases(list, sec, zone, text, n = 6) {
+    const ws = (text || "").split(/[^А-Яа-яЁё]+/).filter((w) => w.length > 3).map(stem);
+    const sc = list.filter((p) => p.s === sec).map((p) => {
+      const ps = p.t.split(/[^А-Яа-яЁё]+/).filter((w) => w.length > 3).map(stem);
+      const hit = ws.filter((w) => ps.includes(w)).length;
+      return { p, score: hit * 3 + (p.z === zone ? 2 : 0) - p.t.length / 400 };
+    }).filter((x) => (ws.length ? x.score >= 3 : x.p.z === zone));
+    return sc.sort((a, b) => b.score - a.score).slice(0, n).map((x) => x.p.t);
+  }
+  // кто отвечает — по словам в тексте (темы из справочника ответственных) и по прошлым выборам руководителя
+  const RESP_RULES = [
+    [/терминал|касс\w* оборуд|видеонаблюд|камер[уы]|\bтсд\b|\bккм\b|принтер|сканер/i, /Цыганков/],
+    [/вывеск|фасад|фреймлайт|лайтбокс|подсветк|портал|проем\w* оформ|оформлени\w* (входа|разгрузк)/i, /Ахпашев/],
+    [/пл[её]нк|оклейк|промо|выделител|короб\w* под|рекламн/i, /Сл[её]зкин/],
+    [/конфет|хозтовар|\bмто\b/i, /Чивчян/],
+    [/печ[ьиь]|расстойк|кофемашин|\bкм\b|кофе ?модул|стеллаж|торец|торц|полк|сетк|витрин|сумочн|ларь|ларя|фров|отбойник|ценникодерж|ограничител|закасс/i, /Ямяк/],
+    [/вентиляц|кондиционер|холодильн\w* оборуд|агрегат|конденсатор|сплит|сололифт|насос/i, /Морозов/],
+    [/светильник|ламп|освещен|не горит|аварийн\w* свет/i, /Ламухина/],
+    [/планировк|перестанов/i, /Кускова/],
+    [/выкладк|планограм|наполнени/i, /Филатова/],
+    [/огнетуш|план\w* эвакуац|\bопс\b|охран|тревожн|пожарн/i, (p) => /ответственный ОПС|ОПС, ответственный/.test(p.role)],
+    [/\bтбо\b|\bтко\b|контейнерн|договор|дератиз|дезинс|арендодат|собственник/i, (p) => /развитию/.test(p.role)],
+  ];
+  function suggestResp(people, sec, text) {
+    let learned = {}; try { learned = JSON.parse(localStorage.getItem("respLearn") || "{}"); } catch (e) {}
+    for (const w of (text || "").split(/[^А-Яа-яЁё]+/).filter((x) => x.length > 3)) { const n = learned[stem(w)]; if (n && people.some((p) => p.name === n)) return { name: n, why: `раньше выбирали для «${w}»` }; }
+    for (const [rx, who] of RESP_RULES) { const m = (text || "").match(rx); if (!m) continue;
+      const p = people.find((x) => (typeof who === "function" ? who(x) : who.test(x.name))); if (p) return { name: p.name, why: `по слову «${m[0]}»` }; }
+    if (sec === "build") { const c = people.find((x) => /Координатор/.test(x.role)); if (c) return { name: c.name, why: "стройка — координатор" }; }
+    return null;
+  }
+  function learnResp(text, name) {
+    if (!name) return; let l = {}; try { l = JSON.parse(localStorage.getItem("respLearn") || "{}"); } catch (e) {}
+    (text || "").split(/[^А-Яа-яЁё]+/).filter((x) => x.length > 4).slice(0, 3).forEach((w) => (l[stem(w)] = name));
+    try { localStorage.setItem("respLearn", JSON.stringify(l)); } catch (e) {}
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function dictate(ta, btn) {
+    if (!SR) return toast("Голос: нажмите 🎤 на клавиатуре телефона");
+    const rec = new SR(); rec.lang = "ru-RU"; rec.interimResults = false; rec.maxAlternatives = 1;
+    btn.classList.add("rec"); btn.textContent = "● слушаю";
+    rec.onresult = (e) => { const s = e.results[0][0].transcript; ta.value = (ta.value ? ta.value.trim() + " " : "") + s.charAt(0).toUpperCase() + s.slice(1); ta.dispatchEvent(new Event("input")); };
+    rec.onerror = (e) => toast(e.error === "not-allowed" ? "Нет доступа к микрофону — разрешите или используйте 🎤 на клавиатуре" : "Не расслышал — ещё раз");
+    rec.onend = () => { btn.classList.remove("rec"); btn.textContent = "🎤 Голосом"; };
+    try { rec.start(); } catch (e) { toast("Голос недоступен — 🎤 на клавиатуре"); }
+  }
+  // коллаж «до/после»: фото замечания слева, исправление справа, подписи сверху
+  async function collage(beforeUrl, afterFile) {
+    const load = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    const rb = await fetch(beforeUrl, { headers: { "X-Telegram-Init-Data": tg ? tg.initData : "" } });
+    if (!rb.ok) throw new Error((await rb.json().catch(() => ({}))).error || "нет фото «до» на сервере");
+    const a = await load(URL.createObjectURL(await rb.blob())), b = await load(URL.createObjectURL(afterFile));
+    const H = 1200, wa = Math.round(a.width * H / a.height), wb = Math.round(b.width * H / b.height), pad = 16, top = 70;
+    const c = document.createElement("canvas"); c.width = wa + wb + pad * 3; c.height = H + top + pad;
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(a, pad, top, wa, H); g.drawImage(b, pad * 2 + wa, top, wb, H);
+    g.font = "bold 44px -apple-system, Inter, Arial"; g.fillStyle = "#dc2626"; g.fillText("ДО", pad + 8, 52); g.fillStyle = "#16a34a"; g.fillText("ПОСЛЕ", pad * 2 + wa + 8, 52);
+    return c.toDataURL("image/jpeg", 0.82).split(",")[1];
+  }
+
   async function remarkForm(id, stage, zi, rid) {
-    const [o, people, all] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/people`), rid ? api("GET", `/api/objects/${id}/remarks`) : []]);
+    const [o, people, all, PH] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/people`), rid ? api("GET", `/api/objects/${id}/remarks`) : [], phrases()]);
     let pre = {}; if (!rid) { try { pre = JSON.parse(sessionStorage.getItem("newRemark") || "{}"); sessionStorage.removeItem("newRemark"); } catch (e) {} }
     const r = rid ? all.find((x) => x.id === rid) : { section: pre.section || (stage == 2 ? "equip" : "build"), zone: pre.zone || ZONES[zi] || ZONES[0], text: pre.text || "", phrase: "", deadline: "", deadline_ask: "", deadline_text: "", photos: [], stage, comments: [], deadline_history: [], status: "open", item_ref: pre.item_ref || "" };
     if (!r) throw new Error("замечание не найдено");
@@ -1061,11 +1128,12 @@
       <label class="f">Зона<select id="zone">${ZONES.map((z) => `<option ${z === r.zone ? "selected" : ""}>${z}</option>`).join("")}</select></label>
       ${pre.hint ? `<div class="note">Пункт чек-листа: ${esc(pre.hint)}</div>` : ""}
       ${(pre.plan_mark || r.plan_mark || {}).plan ? `<a class="chip info" id="onPlan" href="#o/${id}/plan/${(pre.plan_mark || r.plan_mark).plan}/${(pre.plan_mark || r.plan_mark).page || 1}" style="align-self:flex-start">◎ на плане</a>` : rid ? `<a class="chip" href="#o/${id}/plan" style="align-self:flex-start;border:1px solid var(--line)">◎ отметить на плане — откройте «План»</a>` : ""}
-      <div class="card"><span class="kicker">Что сделать / где</span><textarea id="text" rows="3" placeholder="Подкрасить плитку армстронг в тамбуре">${esc(r.text)}</textarea>
+      <div class="card"><div class="row"><span class="kicker">Что сделать / где</span>${voiceOn ? `<button type="button" class="small ghost" id="mic">🎤 Голосом</button>` : ""}</div><textarea id="text" rows="3" placeholder="Подкрасить плитку армстронг в тамбуре">${esc(r.text)}</textarea>
+        <div id="phr"></div>
         <span class="kicker">Ссылка на фото — коснитесь начала и конца фразы</span><div class="words" id="words"></div></div>
       <div class="card"><span class="title">Фото · ${r.photos.length}</span>
         ${r.photos.length ? `<div class="btns">${r.photos.map((p, i) => `<a class="chip ok" href="${esc(p.url)}">фото ${i + 1}</a>`).join("")}</div>` : ""}
-        ${rid ? `<label class="btn">📷 Добавить фото<input type="file" accept="image/*" id="photo" hidden multiple></label>` : `<span class="sub">Фото — сразу после сохранения (камера или галерея), они уйдут на Яндекс Диск</span>`}</div>
+        ${rid ? `<label class="btn">📷 Добавить фото<input type="file" accept="image/*" id="photo" hidden multiple></label>` : `<label class="btn" id="npL">📷 Фото · обязательно<input type="file" accept="image/*" id="newPhotos" hidden multiple></label><span class="sub" id="npS">Камера или галерея — уйдут на Яндекс Диск при сохранении</span>`}</div>
       <div class="card ${r.deadline || r.deadline_text || r.question ? "" : "warnc"}"><span class="kicker" style="color:var(--warn)">Срок устранения · обязательно</span>
         <div class="btns"><button class="small ghost" data-day="${iso(td)}">Сегодня</button><button class="small ghost" data-day="${iso(tm)}">Завтра ${fmtShort(iso(tm))}</button><button class="small ghost" id="pmp">По мере поступления</button></div>
         <label class="f">Дата<input type="date" id="deadline" value="${r.deadline || ""}"></label>
@@ -1075,8 +1143,13 @@
         ${r.deadline_history.length ? `<span class="sub" style="color:var(--warn)">Переносы: ${r.deadline_history.map((h) => fmt(h.date) + (h.reason ? " — " + esc(h.reason) : "")).join("; ")}</span>` : ""}
         <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="q" ${r.question ? "checked" : ""}>Вопрос на согласование (срок не обязателен)</label></div>
       <label class="f">Ответственный${r.section === "equip" ? "" : " (если нужен)"}<select id="resp"><option value="">—</option>${opt(r.responsible)}</select></label>
+      <span class="sub" id="respWhy"></span>
       ${rid ? "" : `<label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="fos">Устранено в ходе приёмки (в первое письмо — зелёным, в апдейты не идёт)</label>`}
-      ${rid ? `<div class="card"><span class="title">Статус</span>${statusChip(r.status)}<div class="btns">
+      ${rid ? `<div class="card"><span class="title">Исправление · до/после</span>
+        ${(r.fix_photos || []).length ? `<div class="btns">${r.fix_photos.map((p, i) => `<a class="chip ok" href="${esc(p.url)}">после ${i + 1}</a>`).join("")}${(r.collages || []).map((p, i) => `<a class="chip info" href="${esc(p.url)}">коллаж ${i + 1}</a>`).join("")}</div>` : ""}
+        <span class="sub">Снимите исправленное с той же точки — пункт станет «исправлено», коллаж «до/после» сохранится на Диск и придёт в чат с ботом для пересылки в МАХ.</span>
+        <label class="btn main">📷 + исправление (фото «после»)<input type="file" accept="image/*" id="fixPhoto" hidden></label></div>
+      <div class="card"><span class="title">Статус</span>${statusChip(r.status)}<div class="btns">
         <button class="small" data-st="fixed">Исправлено</button><button class="small main" data-st="accepted">✓ Принято</button><button class="small ghost" data-st="open">Открыть снова</button></div></div>
         <div class="card"><span class="title">Комментарии</span>
         ${r.comments.map((c) => `<div class="sub" style="color:${c.color || "inherit"}"><b>${esc(c.author)}</b> · ${fmt(c.date)}: ${esc(c.text)}</div>`).join("")}
@@ -1105,6 +1178,38 @@
     document.getElementById("words").addEventListener("click", () => (manual = true));
     if (!phrase && ta.value) phrase = defPhrase();
     drawWords();
+    // типовые формулировки в один тап: по зоне, а по мере ввода — по словам
+    const phrBox = document.getElementById("phr");
+    let phrAll = false;
+    const drawPhr = () => {
+      const sec = segVal("sec") === "Оборудование" ? "equip" : "build", z = document.getElementById("zone").value;
+      const list = rid ? [] : suggestPhrases(PH, sec, z, ta.value, phrAll ? 20 : 5);
+      phrBox.innerHTML = list.length ? `<span class="kicker">Типовые формулировки — коснитесь, затем допишите</span><div class="chips phr">${list.map((x) => `<button type="button" class="chip" data-tp="${esc(x)}">${esc(x)}</button>`).join("")}${phrAll ? "" : `<button type="button" class="chip ghost" id="phrMore">ещё…</button>`}</div>` : "";
+      phrBox.querySelectorAll("[data-tp]").forEach((b) => (b.onclick = () => { ta.value = b.dataset.tp; manual = false; phrase = defPhrase(); drawWords(); autoResp(); ta.focus(); }));
+      const pm = document.getElementById("phrMore"); if (pm) pm.onclick = () => { phrAll = true; drawPhr(); };
+    };
+    let phrT; ta.addEventListener("input", () => { clearTimeout(phrT); phrT = setTimeout(drawPhr, 250); });
+    document.getElementById("zone").addEventListener("change", () => { drawPhr(); autoResp(); });
+    document.querySelectorAll("[data-seg=sec] button, #sec button").forEach((b) => b.addEventListener("click", () => setTimeout(() => { drawPhr(); autoResp(); }, 0)));
+    drawPhr();
+    const mic = document.getElementById("mic"); if (mic) mic.onclick = () => dictate(ta, mic);
+    // ответственный подставляется сам, пока руководитель не выбрал вручную
+    let respTouched = !!r.responsible, suggested = "";
+    const whyEl = document.getElementById("respWhy");
+    function autoResp() {
+      if (respTouched) return;
+      const sec = segVal("sec") === "Оборудование" ? "equip" : "build", s = suggestResp(people, sec, ta.value);
+      const sel = document.getElementById("resp");
+      if (s) { sel.value = s.name; suggested = s.name; whyEl.innerHTML = `Подставлено: <b>${esc(s.name)}</b> — ${esc(s.why)}. Можно сменить или убрать.`; }
+      else if (suggested) { sel.value = ""; suggested = ""; whyEl.textContent = ""; }
+    }
+    ta.addEventListener("input", () => { clearTimeout(ta.rt); ta.rt = setTimeout(autoResp, 400); });
+    document.getElementById("resp").addEventListener("change", () => { respTouched = true; whyEl.textContent = ""; });
+    if (!rid) autoResp();
+    // фото для нового замечания — выбираются до сохранения
+    let newFiles = [], noPhotoOk = false;
+    const np = document.getElementById("newPhotos");
+    if (np) np.onchange = () => { newFiles = newFiles.concat([...np.files]); document.getElementById("npS").textContent = `Выбрано фото: ${newFiles.length} — уйдут на Диск при сохранении`; document.getElementById("npL").classList.add("ok"); };
     $app.querySelectorAll("[data-day]").forEach((b) => (b.onclick = () => { document.getElementById("deadline").value = b.dataset.day; document.getElementById("dtext").value = ""; }));
     document.getElementById("pmp").onclick = () => { document.getElementById("dtext").value = "по мере поступления"; document.getElementById("deadline").value = ""; toast("Срок: по мере поступления"); };
     const respSel = document.getElementById("resp");
@@ -1116,8 +1221,11 @@
       if (pre.plan_mark) body.plan_mark = pre.plan_mark;
       const rsn = document.getElementById("reason"); if (rsn) body.reason = rsn.value;
       const fos = document.getElementById("fos"); if (fos && fos.checked) body.fixed_on_site = true;
+      if (!rid && !newFiles.length && !body.question && !noPhotoOk) { noPhotoOk = true; toast("Нужно хотя бы одно фото. Нажмите «Сохранить» ещё раз, если добавите позже", "err"); document.getElementById("npL").classList.add("warnb"); return; }
+      if (respSel.value && respSel.value !== suggested) learnResp(ta.value, respSel.value);
       try {
         const saved = rid ? await api("PUT", `/api/objects/${id}/remarks/${rid}`, body) : await api("POST", `/api/objects/${id}/remarks`, body);
+        for (const f of newFiles) { try { toast("Загружаю фото на Диск…"); await api("POST", `/api/objects/${id}/remarks/${saved.id}/photo`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); } }
         toast("Сохранено"); location.hash = `#o/${id}/r/${saved.id}`;
       } catch (e) { toast(e.message); }
     };
@@ -1127,6 +1235,21 @@
       remarkForm(id, stage, zi, rid);
     };
     $app.querySelectorAll("[data-st]").forEach((b) => (b.onclick = async () => { try { await api("POST", `/api/objects/${id}/remarks/${rid}/status`, { status: b.dataset.st }); remarkForm(id, stage, zi, rid); } catch (e) { toast(e.message); } }));
+    const fx2 = document.getElementById("fixPhoto");
+    if (fx2) fx2.onchange = async () => {
+      const f = fx2.files[0]; if (!f) return;
+      try {
+        toast("Загружаю фото исправления…");
+        await api("POST", `/api/objects/${id}/remarks/${rid}/photo`, { image_b64: await shrink(f), kind: "fix" });
+        if (r.photos.length) {
+          try { const img = await collage(`/api/objects/${id}/remarks/${rid}/img/before1`, f);
+            const res = await api("POST", `/api/objects/${id}/remarks/${rid}/collage`, { image_b64: img });
+            toast(res.sent ? "Коллаж до/после — в чате с ботом, перешлите в МАХ" : "Коллаж сохранён на Диск"); }
+          catch (e) { toast("Исправление сохранено; коллаж: " + e.message); }
+        } else toast("Исправление сохранено");
+      } catch (e) { toast(e.message); }
+      remarkForm(id, stage, zi, rid);
+    };
     const addc = document.getElementById("addc");
     if (addc) addc.onclick = async () => { const a = document.getElementById("ca").value; await api("POST", `/api/objects/${id}/remarks/${rid}/comment`, a ? { author: a, text: document.getElementById("cm").value } : { text: document.getElementById("cm").value, progress: true }); remarkForm(id, stage, zi, rid); };
   }
@@ -1148,7 +1271,9 @@
     if (!r.ok) throw new Error("лист не загрузился");
     return (IMG[file] = URL.createObjectURL(await r.blob()));
   }
-  const MARK_COLORS = { open: "#dc2626", fixed: "#eab308", accepted: "#16a34a", fixed_on_site: "#16a34a" };
+  // как договорились: стройка — красная, оборудование — синяя, на одобрении — жёлтая, исправлено и принято — серая (точка остаётся)
+  const MARK_COLORS = { open: "#dc2626", fixed: "#eab308", accepted: "#9ca3af", fixed_on_site: "#9ca3af" };
+  const markColor = (m) => (m.status === "open" && m.section === "equip" ? "#2563eb" : MARK_COLORS[m.status] || "#dc2626");
   let PLANMODE = "remark";
   const PVHINT = { remark: "Два пальца — масштаб · касание — метка замечания", point: "Два пальца — масштаб · касание — контрольная точка",
     crop: "Обведите пальцем участок для печати · два пальца — масштаб" };
@@ -1186,11 +1311,11 @@
       ${(plan.crops || []).length ? `<div class="chips"><span class="sub">Сохранённые фрагменты:</span>${plan.crops.map((c, i) => `<button class="chip" data-crop="${i}">🖨 ${esc(c.name)}</button>`).join("")}</div>` : ""}
       <div class="planview" id="pv"><div class="stage" id="stage" style="width:${pg.w}px;height:${pg.h}px">
         <img id="pimg" alt="План" draggable="false" style="width:${pg.w}px;height:${pg.h}px">
-        ${marks.map((m) => `<button class="pmark" data-rid="${m.rid}" style="left:${m.x * 100}%;top:${m.y * 100}%;--c:${MARK_COLORS[m.status] || "#dc2626"}" title="${esc(m.text)}"></button>`).join("")}
+        ${marks.map((m) => `<button class="pmark" data-rid="${m.rid}" style="left:${m.x * 100}%;top:${m.y * 100}%;--c:${markColor(m)}" title="${esc(m.text)}"></button>`).join("")}
         <div id="cropBox" hidden></div>
         ${points.map((m) => { const d = m.fact !== "" && m.fact != null && m.plan_cm ? +m.fact - +m.plan_cm : null; return `<button class="ppoint ${d === null ? "" : Math.abs(d) > 15 ? "bad" : "ok"}" data-pi="${m.i}" style="left:${m.x * 100}%;top:${m.y * 100}%">${m.i + 1}</button>`; }).join("")}
       </div><div class="pv-hint">${PVHINT[PLANMODE]}</div></div>
-      <div class="legend"><span><i style="background:#dc2626"></i>открыто ${cnt("open")}</span><span><i style="background:#eab308"></i>исправлено ${cnt("fixed")}</span><span><i style="background:#16a34a"></i>принято ${cnt("accepted")}</span></div>
+      <div class="legend"><span><i style="background:#dc2626"></i>стройка</span><span><i style="background:#2563eb"></i>оборудование</span><span><i style="background:#eab308"></i>на одобрении ${cnt("fixed")}</span><span><i style="background:#9ca3af"></i>исправлено ${cnt("accepted")}</span></div>
       <div id="sheet" class="sheet" hidden></div>`);
     bindPlanUpload(id);
     bindSeg("pmode", (v) => { PLANMODE = v === "Точка" ? "point" : v === "✂ Печать" ? "crop" : "remark"; document.querySelector(".pv-hint").textContent = PVHINT[PLANMODE];

@@ -125,6 +125,8 @@ def people_for(obj: StoreObject) -> list[dict]:
     cs = json.loads(CONTACTS.read_text(encoding="utf-8"))
     out = [{"name": c["fio"], "email": c.get("email", ""), "role": c.get("role", "")} for c in cs
            if c.get("scope") in ("all", obj.okrug) or (c.get("scope") == "region" and c.get("area") == obj.okrug)]
+    if obj.dev_manager.filled and not any(x["name"] == obj.dev_manager.name for x in out):
+        out.insert(0, {"name": obj.dev_manager.name, "email": obj.dev_manager.email, "role": "Менеджер по развитию региона"})
     if obj.coordinator.filled:
         out.insert(0, {"name": obj.coordinator.name, "email": obj.coordinator.email, "role": "Координатор строительства"})
     return out

@@ -85,6 +85,8 @@ class Remark:
     folder_url: str = ""            # публичная папка замечания на Диске (когда фото больше одного)
     plan_mark: dict = field(default_factory=dict)        # {plan, page, x, y} — точка на плане, x/y в долях 0..1              # пункт листа контроля, из которого создано замечание
     log: list[dict] = field(default_factory=list)          # {who, when, what, before, after}
+    fix_photos: list[dict] = field(default_factory=list)   # фото исправления {path, url}
+    collages: list[dict] = field(default_factory=list)     # коллажи «до/после» {path, url}
 
     @property
     def needs_deadline(self) -> bool:

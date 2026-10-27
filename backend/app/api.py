@@ -10,6 +10,7 @@ import os
 import re
 from dataclasses import asdict
 from datetime import date, timedelta
+from pathlib import Path
 
 from . import firstday, remarks as rm
 from . import norms as norms_mod
@@ -41,6 +42,7 @@ def _pdf(data: bytes, name: str) -> Response:
     return 200, {"Content-Type": "application/pdf", "Content-Disposition": _disp("inline", name)}, data
 
 
+THUMBS = Path(os.environ.get("THUMBS_DIR") or Path(__file__).resolve().parent.parent / "data" / "thumbs")
 _STORES: dict | None = None
 
 
@@ -142,6 +144,8 @@ class Api:
             (o + r"/remarks", "POST", self.create_remark),
             (o + r"/remarks/([0-9a-f]{12})", "PUT", self.update_remark),
             (o + r"/remarks/([0-9a-f]{12})/photo", "POST", self.remark_photo),
+            (o + r"/remarks/([0-9a-f]{12})/img/(before|fix)(\d+)", "GET", self.remark_img),
+            (o + r"/remarks/([0-9a-f]{12})/collage", "POST", self.remark_collage),
             (o + r"/remarks/([0-9a-f]{12})/status", "POST", self.remark_status),
             (o + r"/remarks/([0-9a-f]{12})/comment", "POST", self.remark_comment),
         ]
@@ -786,21 +790,64 @@ class Api:
         self.store.put(o)
         return _json(asdict(r))
 
+    def _thumb(self, oid: str, rid: str, kind: str, n: int) -> Path:
+        d = THUMBS / oid
+        d.mkdir(parents=True, exist_ok=True)
+        return d / f"{rid}_{kind}{n}.jpg"
+
     def remark_photo(self, u, data, _b, oid, rid):
+        """Фото замечания («до») или исправления («после», kind=fix): на Диск; локальная копия — для коллажа."""
         if not self.disk:
             raise ValueError("Яндекс Диск не подключён")
         o = self._obj(oid, u)
         r = self._remark(o, rid)
         img = base64.b64decode(data["image_b64"])
-        n = len(r.photos) + 1
         num = next((i for i, x in enumerate(o.remarks, 1) if x.id == r.id), 0)
-        sub = f"{num:02d}_{r.phrase[:40]}"
-        path = self.disk.upload(img, o.code, r.zone, f"{num:02d}_{r.zone}_{r.phrase[:40]}_{n}.jpg", sub=sub)
-        r.photos.append({"path": path, "url": self.disk.public_url(path)})
-        if len(r.photos) > 1:
-            r.folder_url = self.disk.public_url(path.rsplit("/", 1)[0])
+        if data.get("kind") == "fix":
+            n = len(r.fix_photos) + 1
+            path = self.disk.upload(img, o.code, "Исправления до-после", f"{num:02d}_{r.zone}_{r.phrase[:40]}_после_{n}.jpg")
+            r.fix_photos.append({"path": path, "url": self.disk.public_url(path)})
+            self._thumb(o.id, r.id, "fix", n).write_bytes(img)
+            if r.status == "open":
+                rm.set_status(r, "fixed", is_owner=False)
+            r.log.append({"who": u.display, "when": date.today().isoformat(), "what": "исправление", "before": "", "after": f"фото после {n}"})
+        else:
+            n = len(r.photos) + 1
+            sub = f"{num:02d}_{r.phrase[:40]}"
+            path = self.disk.upload(img, o.code, r.zone, f"{num:02d}_{r.zone}_{r.phrase[:40]}_{n}.jpg", sub=sub)
+            r.photos.append({"path": path, "url": self.disk.public_url(path)})
+            if len(r.photos) > 1:
+                r.folder_url = self.disk.public_url(path.rsplit("/", 1)[0])
+            self._thumb(o.id, r.id, "before", n).write_bytes(img)
         self.store.put(o)
         return _json(asdict(r))
+
+    def remark_img(self, u, _d, _b, oid, rid, kind, n):
+        o = self._obj(oid, u)
+        f = self._thumb(o.id, rid, kind, int(n))
+        if not f.exists():
+            raise LookupError("фото нет на сервере (загружено до обновления) — снимите заново")
+        return 200, {"Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400"}, f.read_bytes()
+
+    def remark_collage(self, u, data, _b, oid, rid):
+        """Коллаж «до/после» собирается на телефоне → Диск («Исправления до-после») → в чат с ботом для пересылки в МАХ."""
+        o = self._obj(oid, u)
+        r = self._remark(o, rid)
+        img = base64.b64decode(data["image_b64"])
+        num = next((i for i, x in enumerate(o.remarks, 1) if x.id == r.id), 0)
+        name = f"{num:02d}_{r.zone}_{r.phrase[:40]}_до-после_{len(r.collages) + 1}.jpg"
+        if self.disk:
+            path = self.disk.upload(img, o.code, "Исправления до-после", name)
+            r.collages.append({"path": path, "url": self.disk.public_url(path)})
+        self.store.put(o)
+        sent = False
+        if self.sender:
+            try:
+                self.sender.send_document(u.id, name, img, f"{o.code} · №{num} {r.text[:80]} — до/после. Перешлите в группу МАХ")
+                sent = True
+            except Exception:
+                pass
+        return _json({"remark": asdict(r), "sent": sent})
 
     def remark_status(self, u, data, _b, oid, rid):
         o = self._obj(oid, u)
