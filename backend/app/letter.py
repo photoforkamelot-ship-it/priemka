@@ -307,24 +307,32 @@ def build(obj: StoreObject, mode: str = "first", today: date | None = None) -> d
         doc.blank()
 
     if mode == "first":
-        if int(s.get("coffee") or 1) == 2:
-            m2 = ex.get("module2") or {}
+        n_cm = int(s.get("coffee") or 1)
+        m2 = ex.get("module2") or {}
+        if n_cm == 2:
             deliver = [x for x in CHECK["coffee2_module"]["deliver"] if not m2.get(x)]
-            have = [x for x in CHECK["coffee2_module"]["have"]]
             doc.head("КОФЕСТАНЦИЯ (2-Й МОДУЛЬ) - К ДОВОЗУ:")
             doc.blank()
             for i, x in enumerate(deliver, 1):
                 doc.p(f"{i}.&nbsp;&nbsp;&nbsp;{esc(x)} – 2;", f"{i}. {x} – 2;", indent=True)
-            for x in have:
-                st = "В НАЛИЧИИ" if m2.get(x, True) else "ОТСУТСТВУЕТ"
-                doc.p(f"●&nbsp;&nbsp;&nbsp;{esc(x)} – 2 – {st};", f"● {x} – 2 – {st};", indent=True)
+        else:
+            doc.head("КОФЕСТАНЦИЯ (1-Й МОДУЛЬ)")
             doc.blank()
+        for x in CHECK["coffee2_module"]["have"]:
+            ok = m2.get(x, True)
+            name, _, tail = x.partition(" (")
+            mid = f"{name} – {n_cm}" + (f" ({tail}" if tail else "")
+            fin = "– В НАЛИЧИИ;" if ok else "– НЕ В НАЛИЧИИ;"
+            doc.p(f"●&nbsp;&nbsp;&nbsp;{esc(mid)} <b>{color(esc(fin), GREEN if ok else ORANGE)}</b>", f"● {mid} {fin}", indent=True)
+        doc.blank()
         albums = ex.get("albums") or {}
         for key, title in CHECK["photo_albums"]:
             url = albums.get(key)
             if key == "batteries" and not url and not ex.get("batteries"):
                 pass
-            doc.p(f'<a href="{esc(url)}"><b>{esc(title)}</b></a>' if url else f"<b>{esc(title)}</b>", title + (f" {url}" if url else ""))
+            doc.p(f'<a href="{esc(url)}"><b>{esc(title)}</b></a>' if url else f"<b>{esc(title)}</b>", title + (f" {url}" if url else ""),
+                  app=f'<a href="{esc(url or "#")}" data-album="{key}" data-title="{esc(title)}"><b>{esc(title)}</b></a>'
+                      + ("" if url else ' <span class="nophoto">нет фото — нажмите</span>'))
         hu, hr = ex.get("height_unloading"), ex.get("height_ramp")
         if hu or hr:
             parts = []
@@ -335,7 +343,7 @@ def build(obj: StoreObject, mode: str = "first", today: date | None = None) -> d
             doc.p("<b>" + esc(";".join(parts)) + "</b>", ";".join(parts))
         doc.blank()
         for st in status_lines(obj):
-            doc.p(f"●&nbsp;&nbsp;&nbsp;{st['html']}", f"● {st['text']}", indent=True)
+            doc.p(f"●&nbsp;&nbsp;&nbsp;{st['html']}", f"● {st['text']}", indent=True, app=f"●&nbsp;&nbsp;&nbsp;{st.get('html_app') or st['html']}")
         if ex.get("ahch_scan"):
             doc.blank()
             doc.p(f'<a href="{esc(ex["ahch_scan"])}"><b>ЛИСТ ГОТОВНОСТИ (АХЧ)</b></a>', f"ЛИСТ ГОТОВНОСТИ (АХЧ) {ex['ahch_scan']}")
@@ -411,7 +419,11 @@ def status_lines(obj: StoreObject) -> list[dict]:
             nm = ask.split()[1] if len(ask.split()) > 1 else ask
             tag = f'<a href="mailto:{esc(mail)}">@{esc(ask)}</a>' if mail else f"@{esc(ask)}"
             html_ += f" {tag} {esc(nm)}, {color(esc(q), RED)}"; text += f" @{ask} {nm}, {q}"
-        out.append({"key": it["key"], "html": html_, "text": text, "state": state, "color": c})
+        row = {"key": it["key"], "html": html_, "text": text, "state": state, "color": c}
+        if it.get("photo"):
+            row["html_app"] = (f'<a href="{esc(url or "#")}" data-album="{it["key"]}" data-title="{esc(subj)}">{esc(subj)}</a>'
+                               + html_[len(subj_h):] + ("" if url else ' <span class="nophoto">📷</span>'))
+        out.append(row)
         if it["key"] == "batteries_move":
             bl = batteries_line(obj)
             if bl:

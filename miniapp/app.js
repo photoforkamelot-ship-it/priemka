@@ -724,8 +724,9 @@
         <div class="card"><span class="title">Обязательные фото</span><span class="sub">Фото уходят на Яндекс Диск, ссылка на альбом сама встаёт в письмо</span>
           ${C.albums.map(([k, t]) => `<div class="row"><span><b style="font-size:14px">${esc(t)}</b><br><span class="sub">${albums[k] ? `фото: ${ac[k] || 1} · <a href="${esc(albums[k])}">открыть</a>` : "нет фото"}</span></span>
             <label class="btn small">📷<input type="file" accept="image/*" multiple hidden data-album="${k}"></label></div>`).join("")}</div>
-        ${+(C.survey.coffee || 1) === 2 ? `<div class="card"><span class="title">Кофестанция, 2-й модуль</span><span class="sub">Отметьте, что уже есть — остальное уйдёт в «К ДОВОЗУ»</span>
-          ${C.module2.deliver.concat(C.module2.have).map((x) => `<label class="tick" style="font-weight:500"><input type="checkbox" data-m2="${esc(x)}" ${m2[x] ?? C.module2.have.includes(x) ? "checked" : ""}> ${esc(x)}</label>`).join("")}</div>` : ""}
+        ${(() => { const two = +(C.survey.coffee || 1) === 2, list = (two ? C.module2.deliver : []).concat(C.module2.have);
+          return `<div class="card"><span class="title">Кофестанция · ${two ? "2-й модуль" : "1 модуль"}</span><span class="sub">Галочка — есть в наличии (зелёным в письме). Снята — ${two ? "к довозу / " : ""}оранжевым «НЕ В НАЛИЧИИ»</span>
+          ${list.map((x) => `<label class="tick" style="font-weight:500"><input type="checkbox" data-m2="${esc(x)}" ${m2[x] ?? C.module2.have.includes(x) ? "checked" : ""}> ${esc(x)}</label>`).join("")}</div>`; })()}
         <div class="card"><span class="title">Лист готовности (АХЧ)</span><span class="sub">Ссылка на скан — для первого письма</span><input id="ahs" value="${esc(ex.ahch_scan || "")}" placeholder="https://disk.yandex.ru/…"></div>`;
     }
     render(tabsH + body + `<a class="btn main" href="#o/${id}/letter/first">К письму →</a>`);
@@ -880,6 +881,24 @@
     document.getElementById("cpTo").onclick = () => copy(L.to.concat(L.cc).map((x) => x[1]).join("; "));
     document.getElementById("cpSubj").onclick = () => copy(L.subject);
     document.getElementById("shg").onchange = async (e) => { await api("PUT", `/api/objects/${id}/extras`, { show_received: e.target.checked }); letterScreen(id, mode); };
+    // фото-разделы и строки статусов с фото: нажатие — открыть фото или догрузить прямо отсюда
+    const cnt = ex.album_count || {};
+    document.getElementById("paper").addEventListener("click", (e) => {
+      const a = e.target.closest("[data-album]"); if (!a) return;
+      e.preventDefault(); e.stopPropagation();
+      const key = a.dataset.album, url = (ex.albums || {})[key];
+      let sh = document.getElementById("lsheet"); if (!sh) { sh = document.createElement("div"); sh.id = "lsheet"; sh.className = "sheet"; document.body.appendChild(sh); }
+      sh.innerHTML = `<b>${esc(a.dataset.title)}</b><span class="sub">${url ? `фото: ${cnt[key] || 1} · ссылка уже в письме` : "фото ещё нет — после загрузки название станет ссылкой в письме"}</span>
+        <div class="btns">${url ? `<button class="main" id="lsOpen">Открыть фото</button>` : ""}<label class="btn ${url ? "" : "main"}">📷 ${url ? "Добавить ещё" : "Загрузить фото"}<input type="file" accept="image/*" multiple hidden id="lsFile"></label></div>
+        <button class="small ghost" id="lsClose">Закрыть</button>`;
+      sh.hidden = false;
+      document.getElementById("lsClose").onclick = () => (sh.hidden = true);
+      const op = document.getElementById("lsOpen"); if (op) op.onclick = () => go(url);
+      document.getElementById("lsFile").onchange = async (ev) => {
+        for (const f of ev.target.files) { try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/album/${key}`, { image_b64: await shrink(f) }); } catch (er) { toast(er.message); } }
+        sh.hidden = true; toast("Фото на Диске — ссылка в письме"); letterScreen(id, mode);
+      };
+    });
     $app.querySelectorAll("#paper [data-rid]").forEach((el) => (el.onclick = () => (location.hash = `#o/${id}/r/${el.dataset.rid}`)));
     if (mode === "update") {
       document.getElementById("zhy").onclick = async () => { await api("PUT", `/api/objects/${id}/extras`, { zh_ok: today }); letterScreen(id, mode); };
