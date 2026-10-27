@@ -172,6 +172,8 @@
   function render(html) {
     const same = lastRoute === location.hash, y = window.scrollY;
     $app.innerHTML = html; lastRoute = location.hash;
+    $app.classList.toggle("two", !!$app.querySelector(":scope > .side2"));
+    $app.classList.toggle("wide", !!$app.querySelector("#pv"));
     const back = SCROLL[location.hash] || 0;
     window.scrollTo(0, same ? y : back);       // перерисовка того же экрана не прыгает наверх
     if (!same && back) setTimeout(() => window.scrollTo(0, back), 60);
@@ -1096,7 +1098,15 @@
           <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px"><select data-ca><option value="">Прогресс / новый срок — оранжевым</option>${COMMENT_AUTHORS.map((a) => `<option>${a}</option>`).join("")}${o.coordinator.name ? `<option>${esc(o.coordinator.name)}</option>` : ""}</select>
           <textarea rows="2" data-ct placeholder="(сегодня сделают)"></textarea><button class="small" data-cadd>Добавить</button></div></details></div>`).join("") || `<div class="empty">Открытых пунктов нет</div>`}
       <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="noch" ${ex.nochange ? "checked" : ""}> За сутки ничего не изменилось (оранжевая строка «Замечания по строительной части»)</label>` : "";
-    render(`${warn.length ? `<div class="card warnc"><b>Проверьте перед отправкой</b><span class="sub">${esc(warn.join(" · "))}</span></div>` : ""}
+    const LN = Object.fromEntries((L.items || []).map((i) => [i.rid, i.n]));
+    const SF = letterScreen.f || (letterScreen.f = { author: "", status: "" });
+    const flt = rs.filter((r) => (!SF.author || r.author_name === SF.author) && (!SF.status || (SF.status === "nodl" ? r.needs_deadline : r.status === SF.status)));
+    const side = `<aside class="side2"><div class="group">Замечания · ${flt.length}</div>
+      <div class="chips">${[["", "все"], ["open", "открыто"], ["fixed", "исправлено"], ["accepted", "принято"], ["nodl", "без срока"]].map(([v, n]) => `<button class="chip ${SF.status === v ? "on" : ""}" data-fs="${v}">${n}</button>`).join("")}</div>
+      ${L.authors.length > 1 ? `<div class="chips">${[{ name: "" }].concat(L.authors).map((a) => `<button class="chip ${SF.author === a.name ? "on" : ""}" data-fa="${esc(a.name)}" ${a.bg ? `style="background:${a.bg};color:#16181d"` : ""}>${a.name ? esc(a.name) : "все авторы"}</button>`).join("")}</div>` : ""}
+      <div class="list">${flt.map((r) => `<a href="#o/${id}/r/${r.id}" data-hl="${r.id}"><span class="t"><b>${r.section === "equip" ? "Обор." : "Стр."} ${LN[r.id] ? "№" + LN[r.id] : "— не в письме"} · ${esc(r.zone)}</b><span>${esc(r.text)}</span>
+        <span>${statusChip(r.status)} ${r.deadline ? "срок " + fmtShort(r.deadline) : r.needs_deadline ? '<b style="color:var(--warn)">без срока</b>' : ""} · ${esc(r.author_name)}</span></span></a>`).join("") || `<div class="empty">Нет пунктов</div>`}</div></aside>`;
+    render(`${side}<div class="main2">${warn.length ? `<div class="card warnc"><b>Проверьте перед отправкой</b><span class="sub">${esc(warn.join(" · "))}</span></div>` : ""}
       ${editor}
       <div class="row"><div class="group">${mode === "first" ? "Письмо в вёрстке шаблона" : "Апдейт — предпросмотр"}</div><button class="small ghost" id="mergeB">${MERGE.on ? "Отмена" : "Объединить в подпункты"}</button></div>
       ${MERGE.on ? `<div class="card warnc"><b>Выберите пункты касанием</b><span class="sub">Подпункты сохранят свои сроки, фото и точки на плане; «принято» — по каждому отдельно. Объединить можно только внутри стройки или оборудования.</span>
@@ -1109,7 +1119,13 @@
         <span class="sub"><b>Тема:</b> ${esc(L.subject)}</span>
         <div class="btns"><button class="small ghost" id="cpTo">Скопировать адреса</button><button class="small ghost" id="cpSubj">Скопировать тему</button></div></details>
       <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="shg" ${ex.show_received ? "checked" : ""}> В недовозах писать «(вместо N пришло M)»</label>
-      <div class="bottom" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="main" id="copyL">Скопировать письмо</button><button id="mail">Открыть почту</button></div>`);
+      <div class="bottom" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="main" id="copyL">Скопировать письмо</button><button id="mail">Открыть почту</button></div></div>`);
+    $app.querySelectorAll("[data-fs]").forEach((b) => (b.onclick = () => { SF.status = b.dataset.fs; letterScreen(id, mode); }));
+    $app.querySelectorAll("[data-fa]").forEach((b) => (b.onclick = () => { SF.author = b.dataset.fa; letterScreen(id, mode); }));
+    // наведение на пункт слева подсвечивает его в письме справа
+    $app.querySelectorAll("[data-hl]").forEach((a) => { const el = () => document.querySelector(`#paper [data-rid="${a.dataset.hl}"]`);
+      a.onmouseenter = () => { const e = el(); if (e) { e.classList.add("msel"); e.scrollIntoView({ block: "center", behavior: "smooth" }); } };
+      a.onmouseleave = () => { const e = el(); if (e) e.classList.remove("msel"); }; });
     bindSeg("lmode", (v) => (location.hash = `#o/${id}/letter/${v === "Апдейт" ? "update" : "first"}`));
     const markSent = () => { if (mode === "first" && ex.first_sent !== today) api("PUT", `/api/objects/${id}/extras`, { first_sent: today }).catch(() => {}); };
     document.getElementById("copyL").onclick = () => { copyHtml(L.html, L.text); markSent(); };
