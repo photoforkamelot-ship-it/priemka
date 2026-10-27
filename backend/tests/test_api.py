@@ -1,6 +1,6 @@
 import base64
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pymupdf
 
@@ -75,3 +75,24 @@ def test_reminders():
     assert "contracts" in keys(date(2026, 11, 7)) and "contracts" not in keys(date(2026, 11, 8))
     o.flags["dvornik_hired"] = True
     assert "dvornik_act" in keys(date(2026, 11, 30))
+
+
+def test_timed_reminders():
+    from datetime import datetime
+    from app import firstday
+    from app.models import Remark
+    api = Api(MemoryStore(), TOKEN)
+    oid = make(api)
+    o = api.store.get(oid)
+    acc = o.accept_date
+    at = lambda d, hm: datetime.fromisoformat(f"{d.isoformat()}T{hm}:00")
+    keys = lambda d, hm: [r.key for r in firstday.due(o, at(d, hm))]
+    assert "first_12:30" in keys(acc, "12:40") and "first_12:30" not in keys(acc, "14:10")
+    o.remarks.append(Remark(id="r1", section="build", zone="Тамбур", text="Покрасить", deadline=(acc + timedelta(days=2)).isoformat(), created="1"))
+    d2 = acc + timedelta(days=2)
+    assert "zh_check" in keys(d2, "09:10") and "update_soon" in keys(d2, "09:45") and "dl_today_r1" in keys(d2, "09:30")
+    assert "dl_late_r1" in keys(d2 + timedelta(days=3), "09:00")
+    o.extras["zh_ok"] = d2.isoformat()
+    assert "update_soon" not in keys(d2, "09:45")
+    o.flags["sent"] = {"dl_today_r1": d2.isoformat()}
+    assert "dl_today_r1" not in keys(d2, "11:00")

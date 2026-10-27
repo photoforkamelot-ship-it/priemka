@@ -47,16 +47,18 @@ class H(BaseHTTPRequestHandler):
 
 
 def reminders_loop():
-    hour, last = int(os.environ.get("REMIND_HOUR", "9")), None
+    """VPS: тик напоминаний каждые 5 минут (каждое напоминание всё равно уходит раз в день), бэкап — раз в сутки."""
+    from bot.bot import tick
+    last = None
     while True:
-        now = datetime.now(app.tz)
-        if now.hour == hour and last != now.date():
-            last = now.date()
-            try:
-                sys.stderr.write(f"daily: {app.run_daily()}\n")
-            except Exception as e:
-                sys.stderr.write(f"daily error: {e!r}\n")
-        time.sleep(60)
+        try:
+            tick(app.store, app.sender)
+            now = datetime.now(app.tz)
+            if now.hour == 3 and last != now.date():
+                last = now.date(); app.run_daily()
+        except Exception as e:
+            sys.stderr.write(f"tick error: {e!r}\n")
+        time.sleep(300)
 
 
 if __name__ == "__main__":

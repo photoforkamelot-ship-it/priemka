@@ -120,6 +120,8 @@ class Api:
             (o + r"/print/(konvert|dvornik|vcf|ahchlist)", "POST", self.send_to_chat),
             (o + r"/ahch-scan", "POST", self.ahch_scan),
             (o + r"/docs", "GET", self.get_docs),
+            (o + r"/feedback", "GET", self.get_feedback),
+            (o + r"/feedback", "PUT", self.put_feedback),
             (o + r"/docs/(elab|eom|other)", "POST", self.upload_doc),
             (o + r"/vcf", "GET", self.get_vcf),
             (o + r"/zones/(\d)", "GET", self.zones),
@@ -571,6 +573,41 @@ class Api:
         if kind == "konvert":
             return _pdf(pdfs.envelope_insert(o), f"konvert-{o.code}.pdf")
         return _pdf(pdfs.dvornik_poster(o), f"dvornik-{o.code}.pdf")
+
+    FEEDBACK_TO = ["Сидоров Алексей Вадимович", "Смирнов Сергей Владимирович", "Филатова Анастасия Сергеевна",
+                   "Суркова Екатерина Константиновна", "Тимофеева Ксения Александровна"]
+
+    def get_feedback(self, u, _d, _b, oid):
+        """Обратная связь через 1 и 2 недели после открытия: опросник → черновик письма."""
+        from .letter import person_email
+        o = self._obj(oid, u)
+        fb = o.extras.get("feedback") or {}
+        to = [(n, person_email(n, o)) for n in self.FEEDBACK_TO]
+        wk = fb.get("week") or 1
+        rows = [x for x in fb.get("rows", []) if (x.get("problem") or "").strip()]
+        lines = [f"Коллеги, добрый день!", "",
+                 f"Обратная связь по магазину {o.code}, {o.full_address} — {wk} нед. после открытия" + (f" ({o.open_date:%d.%m.%Y})" if o.open_date else "") + ".", ""]
+        if rows:
+            for i, x in enumerate(rows, 1):
+                lines.append(f"{i}. {x['problem'].strip()}" + (f" — обращались: {x['who'].strip()}" if x.get("who") else "")
+                             + (f"; прогресс: {x['progress'].strip()}" if x.get("progress") else "; прогресса нет"))
+        else:
+            lines.append("Проблем нет, магазин работает в штатном режиме.")
+        lines += ["", "С уважением,", u.display]
+        subj = f"{o.code} {o.city} г, {o.address} - обратная связь ({wk} нед. после открытия)"
+        body = "\n".join(lines)
+        return _json({"week": wk, "rows": fb.get("rows", []), "to": to, "subject": subj, "body": body,
+                      "mailto": texts.mailto(", ".join(e for _, e in to if e), subj, body, o.store_email)})
+
+    def put_feedback(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        fb = o.extras.setdefault("feedback", {})
+        if "week" in data:
+            fb["week"] = int(data["week"] or 1)
+        if "rows" in data:
+            fb["rows"] = [{k: str(x.get(k, ""))[:500] for k in ("problem", "who", "progress")} for x in data["rows"]][:20]
+        self.store.put(o)
+        return self.get_feedback(u, None, None, oid)
 
     DOCS = {"elab": "Отчёт электролаборатории", "eom": "ЭОМ (проект электроснабжения)", "other": "Прочие документы"}
 

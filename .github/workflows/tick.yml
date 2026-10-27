@@ -1,0 +1,15 @@
+# Напоминания бота по времени: каждые 30 минут будит приложение на PythonAnywhere.
+# Бот сам считает местное время каждого объекта (Пермь, Томск, Москва…) и шлёт то, что пора, — каждое один раз в день.
+name: reminders-tick
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Тик напоминаний
+        run: |
+          curl -fsS --retry 2 --retry-delay 20 -X POST \
+            -H "X-Cron-Key: ${{ secrets.CRON_SECRET }}" "https://ilginalexander.pythonanywhere.com/cron/tick"

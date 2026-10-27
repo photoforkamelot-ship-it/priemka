@@ -165,11 +165,11 @@
   // ---------- новый объект и данные ----------
   function segHtml(id, vals, on) { return `<div class="seg" id="${id}">${vals.map((x) => `<button type="button" data-v="${x}" class="${x === on ? "on" : ""}">${x}</button>`).join("")}</div>`; }
   function bindSeg(id, cb) {
-    $app.querySelectorAll(`#${id} button`).forEach((b) => (b.onclick = () => {
-      $app.querySelectorAll(`#${id} button`).forEach((x) => x.classList.remove("on")); b.classList.add("on"); cb && cb(b.dataset.v);
+    document.querySelectorAll(`#${id} button`).forEach((b) => (b.onclick = () => {
+      document.querySelectorAll(`#${id} button`).forEach((x) => x.classList.remove("on")); b.classList.add("on"); cb && cb(b.dataset.v);
     }));
   }
-  const segVal = (id) => ($app.querySelector(`#${id} .on`) || {}).dataset?.v;
+  const segVal = (id) => (document.querySelector(`#${id} .on`) || {}).dataset?.v;
   function storeCard(o, d) {
     return `<div class="card">
       <div class="grid2"><label class="f">Код магазина<input name="code" value="${esc(o.code)}" placeholder="ПР22" autocapitalize="characters" required></label>
@@ -382,7 +382,9 @@
     top({ back: ["#objects", "Объекты"], cap: objLine(o), title: "Подготовка", tabs: [id, "prep"],
       right: `<span class="sub" style="font-weight:700" id="prog">${prog()} из ${items.length}</span>`,
       extra: `<div class="bar"><i id="barI" style="width:${(prog() / items.length) * 100}%"></i></div>` });
-    render(`<div class="row"><span class="sub">Памятка «Не забывай» с данными объекта</span><button class="small" id="shareMemo">Поделиться памяткой</button></div>` + wrap.innerHTML);
+    const isOpen = o.open_date && new Date().toISOString().slice(0, 10) >= o.open_date;
+    render(`${isOpen ? `<a class="btn" href="#o/${id}/feedback">📝 Обратная связь через 1 и 2 недели — опросник и письмо</a>` : ""}
+      <div class="row"><span class="sub">Памятка «Не забывай» с данными объекта</span><button class="small" id="shareMemo">Поделиться памяткой</button></div>` + wrap.innerHTML);
     document.getElementById("shareMemo").onclick = () => shareUrl(absUrl(MEMO + "index.html"), "Не забывай — памятка открытия");
     const live = [...$app.querySelectorAll("details.item")];
     const upd = () => { const n = live.filter((d) => d.dataset.done === "1").length; document.getElementById("prog").textContent = `${n} из ${live.length}`; document.getElementById("barI").style.width = (n / live.length) * 100 + "%"; };
@@ -570,6 +572,27 @@
       const files = []; for (const f of inp.files) files.push(/pdf/i.test(f.type) ? { b64: await b64file(f), pdf: true } : { b64: await shrink(f, 2400) });
       try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/docs/${inp.dataset.up}`, { files }); toast("Документ на Диске"); docsScreen(id); } catch (e) { toast(e.message); }
     }));
+  }
+
+  // ---------- обратная связь через 1 и 2 недели после открытия ----------
+  async function feedbackScreen(id) {
+    const [o, F] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/feedback`)]);
+    top({ back: [`#o/${id}`, "Подготовка"], cap: objLine(o), title: "Обратная связь", extra: segHtml("fbw", ["1 неделя", "2 недели"], F.week === 2 ? "2 недели" : "1 неделя") });
+    const rows = F.rows.length ? F.rows : [{ problem: "", who: "", progress: "" }];
+    render(`<span class="sub">Опросник: какая проблема, к кому обращались, есть ли прогресс. Пусто — письмо «проблем нет».</span>
+      ${rows.map((x, i) => `<div class="card" data-fr="${i}"><label class="f">Проблема<textarea rows="2" data-ff="problem">${esc(x.problem)}</textarea></label>
+        <div class="grid2"><label class="f">К кому обращались<input data-ff="who" value="${esc(x.who)}"></label><label class="f">Прогресс<input data-ff="progress" value="${esc(x.progress)}" placeholder="нет"></label></div></div>`).join("")}
+      <button class="small ghost" id="fbAdd">+ ещё проблема</button>
+      <div class="card"><span class="title">Черновик письма</span><span class="sub"><b>Кому:</b> ${F.to.map(([n, e]) => esc(n) + (e ? "" : " (нет почты)")).join(", ")}</span><span class="sub"><b>Тема:</b> ${esc(F.subject)}</span>
+        <pre class="tpl" style="white-space:pre-wrap">${esc(F.body)}</pre></div>
+      <div class="bottom" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button id="fbCopy">Скопировать текст</button><button class="main" id="fbMail">Открыть почту</button></div>`);
+    const collect = () => [...$app.querySelectorAll("[data-fr]")].map((c) => Object.fromEntries([...c.querySelectorAll("[data-ff]")].map((i) => [i.dataset.ff, i.value])));
+    const save = async (extra = {}) => { await api("PUT", `/api/objects/${id}/feedback`, { rows: collect(), ...extra }); feedbackScreen(id); };
+    $app.querySelectorAll("[data-ff]").forEach((i) => (i.onchange = () => save()));
+    document.getElementById("fbAdd").onclick = async () => { await api("PUT", `/api/objects/${id}/feedback`, { rows: collect().concat([{ problem: "", who: "", progress: "" }]) }); feedbackScreen(id); };
+    bindSeg("fbw", (v) => save({ week: v.startsWith("2") ? 2 : 1 }));
+    document.getElementById("fbCopy").onclick = () => copy(F.body);
+    document.getElementById("fbMail").onclick = () => go(F.mailto);
   }
 
   async function printToChat(id, kind) {
@@ -954,8 +977,9 @@
       <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="shg" ${ex.show_received ? "checked" : ""}> В недовозах писать «(вместо N пришло M)»</label>
       <div class="bottom" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="main" id="copyL">Скопировать письмо</button><button id="mail">Открыть почту</button></div>`);
     bindSeg("lmode", (v) => (location.hash = `#o/${id}/letter/${v === "Апдейт" ? "update" : "first"}`));
-    document.getElementById("copyL").onclick = () => copyHtml(L.html, L.text);
-    document.getElementById("mail").onclick = () => { copyHtml(L.html, L.text); setTimeout(() => go(L.mailto), 400); };
+    const markSent = () => { if (mode === "first" && ex.first_sent !== today) api("PUT", `/api/objects/${id}/extras`, { first_sent: today }).catch(() => {}); };
+    document.getElementById("copyL").onclick = () => { copyHtml(L.html, L.text); markSent(); };
+    document.getElementById("mail").onclick = () => { copyHtml(L.html, L.text); markSent(); setTimeout(() => go(L.mailto), 400); };
     document.getElementById("cpTo").onclick = () => copy(L.to.concat(L.cc).map((x) => x[1]).join("; "));
     document.getElementById("cpSubj").onclick = () => copy(L.subject);
     document.getElementById("shg").onchange = async (e) => { await api("PUT", `/api/objects/${id}/extras`, { show_received: e.target.checked }); letterScreen(id, mode); };
@@ -1293,6 +1317,7 @@
       if (m && m[2] === "instr") return await instrScreen(m[1]);
       if (m && m[2] === "contracts") return await contractsScreen(m[1]);
       if (m && m[2] === "docs") return await docsScreen(m[1]);
+      if (m && m[2] === "feedback") return await feedbackScreen(m[1]);
       if (m && m[2] === "ahch") return await ahchScreen(m[1]);
       if (m && m[2] === "dvornik") return await dvornikScreen(m[1]);
       if (m && m[2] === "letter") return await letterScreen(m[1], m[3] === "update" ? "update" : "first");

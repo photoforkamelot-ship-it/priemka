@@ -52,43 +52,91 @@ def handle_update(update: dict, sender: Sender, store: Store) -> None:
                          [("Открыть приложение", "open:objects")])
         return
     cb = update.get("callback_query")
-    if cb:
-        sender.call("answerCallbackQuery", {"callback_query_id": cb["id"]})
-        data, uid = cb.get("data", ""), cb["from"]["id"]
-        oid = (cb.get("message", {}).get("reply_markup") and None) or None  # объект в callback: «done:cash|<id>»
-        if "|" in data:
-            data, oid = data.split("|", 1)
-        if oid and data.startswith("done:"):
-            o = store.get(oid)
-            if o and (o.owner_tg == uid or uid in o.team_tg):
-                o.first_day_done[data[5:]] = True
-                store.put(o)
-                sender.send_text(uid, "Отметил ✅")
+    if not cb:
+        return
+    sender.call("answerCallbackQuery", {"callback_query_id": cb["id"]})
+    data, uid = cb.get("data", ""), cb["from"]["id"]
+    if data == "noop" or "|" not in data:
+        return
+    data, oid = data.split("|", 1)
+    o = store.get(oid)
+    if not o or not (o.owner_tg == uid or uid in o.team_tg):
+        return
+    today = local_now(o).date()
+    if data.startswith("done:"):
+        o.first_day_done[data[5:]] = True
+        reply = "Отметил ✅"
+    elif data == "zh:ok":
+        o.extras["zh_ok"] = today.isoformat()
+        reply = "Отметил: Жихарева приняла фото ✅ Апдейт можно отправлять до 10:00."
+    elif data == "sent:first":
+        o.extras["first_sent"] = today.isoformat()
+        reply = "Отметил: первое письмо отправлено ✅"
+    elif data.startswith("snooze:"):
+        o.flags.setdefault("snooze", {})[data[7:]] = (today + timedelta(days=1)).isoformat()
+        reply = "Хорошо, напомню завтра."
+    elif data == "cash_wait":
+        reply = "Проверьте заявку на доступ к кассе в ЯК (Помощь → мои заявки) и напишите исполнителю. Завтра спрошу ещё раз."
+    elif data.startswith("print:"):
+        from app.generators import pdfs
+        kind = data[6:]
+        make = {"konvert": pdfs.envelope_insert, "dvornik": pdfs.dvornik_poster,
+                "ahchlist": lambda x: pdfs.readiness_list(x)}.get(kind)
+        if make:
+            sender.send_document(uid, f"{kind}-{o.code}.pdf", make(o), "На печать → «Поделиться» → Kyocera Mobile Print")
+        return
+    else:
+        return
+    store.put(o)
+    sender.send_text(uid, f"<b>{o.code}</b> · {reply}")
 
 
 ROUTES = {"open:prep": "o/{id}", "open:contracts": "o/{id}/contracts", "open:object": "o/{id}/data",
           "open:letter": "o/{id}/letter/first", "open:update": "o/{id}/letter/update", "open:walk2": "o/{id}/walk/2",
-          "open:walk3": "o/{id}/walk/3", "open:ahch": "o/{id}/ahch", "memo:dvornik": "o/{id}/dvornik", "open:objects": "objects"}
+          "open:walk3": "o/{id}/walk/3", "open:ahch": "o/{id}/ahch", "memo:dvornik": "o/{id}/dvornik", "open:objects": "objects",
+          "open:feedback": "o/{id}/feedback", "open:memo-forma": "doc/memo%2Fpamyatka-otkrytiya%2Finstr%2Fforma%2Fforma.html"}
 
 
 def route(action: str, oid: str) -> str:
     """Кнопка напоминания: экран приложения этого объекта, отметка «сделано» или звонок."""
-    if action.startswith(("done:", "snooze:", "print:")) or action == "cash_wait":
+    if action.startswith(("done:", "snooze:", "print:", "zh:", "sent:")) or action == "cash_wait":
         return f"{action}|{oid}"
     if action in ROUTES:
         return "open:" + ROUTES[action].format(id=oid)
+    if action.startswith("open:r/"):
+        return f"open:o/{oid}/{action[5:]}"
     return action
 
 
-def daily(store: Store, sender: Sender, today: date | None = None) -> int:
-    """Запускается таймером раз в день (утром по местному времени)."""
-    today = today or datetime.now(timezone(timedelta(hours=5))).date()
+def local_now(o, utc: datetime | None = None) -> datetime:
+    utc = utc or datetime.now(timezone.utc)
+    return utc.astimezone(timezone(timedelta(hours=firstday.tz_hours(o))))
+
+
+def tick(store: Store, sender: Sender, utc: datetime | None = None) -> int:
+    """Каждые 30 минут: по местному времени каждого объекта — что пора отправить (каждое — раз в день)."""
     n = 0
     for o in store.all():
-        for r in firstday.reminders(o, today):
+        now = local_now(o, utc)
+        rs = firstday.due(o, now)
+        if not rs:
+            continue
+        for r in rs:
             buttons = [(t, route(a, o.id)) for t, a in r.buttons]
-            for uid in {o.owner_tg, *o.team_tg}:
+            for uid in ({r.to} if r.to else {o.owner_tg, *o.team_tg}):
                 if uid:
-                    sender.send_text(uid, f"<b>{o.code}</b> · {r.text}", buttons)
-                    n += 1
+                    try:
+                        sender.send_text(uid, f"<b>{o.code}</b> · {r.text}", buttons)
+                        n += 1
+                    except Exception as e:  # один недоставленный — не повод ронять остальные
+                        sys.stderr.write(f"send {o.code} {r.key}: {e!r}\n")
+            if not isinstance(o.flags.get("sent"), dict):
+                o.flags["sent"] = {}
+            o.flags["sent"][r.key] = now.date().isoformat()
+        store.put(o)
     return n
+
+
+def daily(store: Store, sender: Sender, today: date | None = None) -> int:
+    """Совместимость: утренний прогон = обычный тик."""
+    return tick(store, sender)

@@ -123,6 +123,11 @@ class App:
             if not _eq(h.get("x-cron-key", ""), self.cron_secret):
                 return 403, {}, b""
             return 200, {"Content-Type": "application/json"}, json.dumps(self.run_daily()).encode()
+        if path == "/cron/tick" and method == "POST":
+            if not _eq(h.get("x-cron-key", ""), self.cron_secret):
+                return 403, {}, b""
+            from bot.bot import tick
+            return 200, {"Content-Type": "application/json"}, json.dumps({"sent": tick(self.store, self.sender)}).encode()
         if path == "/cron/setwebhook" and method == "POST":
             if not _eq(h.get("x-cron-key", ""), self.cron_secret):
                 return 403, {}, b""
