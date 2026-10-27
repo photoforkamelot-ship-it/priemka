@@ -335,7 +335,7 @@ def build(obj: StoreObject, mode: str = "first", today: date | None = None) -> d
             doc.p("<b>" + esc(";".join(parts)) + "</b>", ";".join(parts))
         doc.blank()
         for st in status_lines(obj):
-            doc.p(f"●&nbsp;&nbsp;&nbsp;{color(esc(st['text']), st['color'])};", f"● {st['text']};", indent=True)
+            doc.p(f"●&nbsp;&nbsp;&nbsp;{st['html']}", f"● {st['text']}", indent=True)
         if ex.get("ahch_scan"):
             doc.blank()
             doc.p(f'<a href="{esc(ex["ahch_scan"])}"><b>ЛИСТ ГОТОВНОСТИ (АХЧ)</b></a>', f"ЛИСТ ГОТОВНОСТИ (АХЧ) {ex['ahch_scan']}")
@@ -359,26 +359,68 @@ def sections_word(n: int) -> str:
     return "СЕКЦИЙ"
 
 
+def status_def(key: str) -> dict:
+    return next((x for x in CHECK["statuses"] if x["key"] == key), {})
+
+
+def status_phrase(it: dict, cur: dict) -> tuple[str, str]:
+    """(состояние, финальная формулировка): ok / na — зелёным, bad — оранжевым."""
+    state = cur.get("state") or "ok"
+    opts = {"ok": it.get("ok") or [], "na": it.get("na") or [], "bad": it.get("bad") or []}.get(state) or it.get("ok") or [""]
+    phrase = (cur.get("phrase") or "").strip() or opts[0]
+    return state, phrase
+
+
 def status_lines(obj: StoreObject) -> list[dict]:
-    """Блок статусов (●): зелёный — в порядке, оранжевый — критично исправить; «off» и неактуальные — не выводятся."""
+    """Блок статусов (●) как в письмах: предмет — чёрным (со ссылкой на фото, если есть),
+    конечная формулировка — жирным зелёным (в норме и «не предусмотрено») или оранжевым + «УСТРАНЕНИЕ дата»;
+    дальше — приписка и @вопрос ответственному. «off» и неактуальные для объекта — не выводятся."""
     s = survey(obj)
     st = obj.statuses or {}
+    albums = (obj.extras or {}).get("albums") or {}
     out = []
     for it in CHECK["statuses"]:
         need = it.get("needs")
         cur = st.get(it["key"], {})
-        state = cur.get("state", "ok")
-        if state == "off" or (need and not s.get(need)):
+        if cur.get("state") == "off" or (need and not s.get(need)):
             continue
-        text = cur.get("text") or (it["ok"] if state == "ok" else it["bad"])
-        out.append({"key": it["key"], "text": text, "state": state, "color": GREEN if state == "ok" else ORANGE})
+        if not cur.get("state") and it.get("na_if_not") and s.get(it["na_if_not"]) is False:
+            cur = {**cur, "state": "na"}
+        state, phrase = status_phrase(it, cur)
+        subj = it["subject"]
+        url = albums.get(it["key"])
+        subj_h = f'<a href="{esc(url)}">{esc(subj)}</a>' if url else esc(subj)
+        cnt = cur.get("count")
+        mid_t = f" – {cnt} ШТ" if it.get("count") and cnt not in (None, "") else ""
+        sep = it.get("sep") or " "
+        fin_t = (" " if phrase.startswith("–") else (sep if not mid_t else " – ")) + phrase
+        if state == "bad" and cur.get("deadline"):
+            fin_t += "; УСТРАНЕНИЕ " + date.fromisoformat(cur["deadline"]).strftime("%d.%m.%y")
+        fin_t += ";"
+        c = ORANGE if state == "bad" else GREEN
+        fin_h = esc(fin_t).replace("RAL 7012", f'</span><span style="color:#44546A">RAL 7012</span><span style="color:{c}">')
+        html_ = subj_h + esc(mid_t) + f"<b>{color(fin_h, c)}</b>"
+        text = subj + mid_t + fin_t
+        note = (cur.get("note") or "").strip()
+        if note:
+            html_ += " " + esc(note); text += " " + note
+        ask = (cur.get("ask") or "").strip()
+        if ask:
+            mail = person_email(ask, obj)
+            q = (cur.get("question") or "").strip() or "подскажи, пожалуйста, срок устранения"
+            nm = ask.split()[1] if len(ask.split()) > 1 else ask
+            tag = f'<a href="mailto:{esc(mail)}">@{esc(ask)}</a>' if mail else f"@{esc(ask)}"
+            html_ += f" {tag} {esc(nm)}, {color(esc(q), RED)}"; text += f" @{ask} {nm}, {q}"
+        out.append({"key": it["key"], "html": html_, "text": text, "state": state, "color": c})
         if it["key"] == "batteries_move":
             bl = batteries_line(obj)
             if bl:
-                out.append({"key": "batteries", "text": f"КОЛИЧЕСТВО БАТАРЕЙ: {bl}", "state": "ok", "color": "black"})
+                out.append({"key": "batteries", "html": f"КОЛИЧЕСТВО БАТАРЕЙ: <b>{color(esc(bl), GREEN)}</b>",
+                            "text": f"КОЛИЧЕСТВО БАТАРЕЙ: {bl}", "state": "ok", "color": GREEN})
             pumps = (obj.extras or {}).get("pumps")
             if pumps not in (None, ""):
-                out.append({"key": "pumps", "text": f"КОЛИЧЕСТВО НАСОСОВ (СОЛОЛИФТОВ): {pumps}", "state": "ok", "color": "black"})
+                out.append({"key": "pumps", "html": f"КОЛИЧЕСТВО НАСОСОВ (СОЛОЛИФТОВ): <b>{color(esc(str(pumps)), GREEN)}</b>",
+                            "text": f"КОЛИЧЕСТВО НАСОСОВ (СОЛОЛИФТОВ): {pumps}", "state": "ok", "color": GREEN})
     return out
 
 

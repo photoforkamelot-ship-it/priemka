@@ -218,3 +218,19 @@ summary:active{filter:brightness(.97)}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--card);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;box-shadow:0 -8px 24px rgba(0,0,0,.18);max-width:720px;margin:0 auto}
 a.chipb{text-decoration:none;display:inline-flex;align-items:center}
 .badin{border-color:#ea580c!important;color:#ea580c;background:var(--warn-soft)!important}
+
+/* статусы (●) как в письме */
+.stc.na{border-left:4px solid var(--ok)}
+.stprev{font-family:"Times New Roman",Times,serif;font-size:14px;line-height:1.35;color:var(--fg)}
+.stprev a{color:#0563C1;text-decoration:underline}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips .chip{white-space:normal;text-align:left;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-size:12px;font-weight:600;padding:7px 10px;border-radius:999px;min-height:34px}
+.chips .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chipin{flex:1 1 140px;min-width:120px;font-size:12px;padding:7px 10px;border-radius:999px;min-height:34px}
+.chipin.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.strow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.f.sm{font-size:12px}.f.sm input{font-size:14px;min-height:38px}
+.stmore summary{font-size:13px;color:var(--accent);cursor:pointer;padding:4px 0}
+.stmore[open]{display:grid;gap:8px}
+.passok{display:flex;gap:12px;align-items:center}
+.passok .big{flex:1}

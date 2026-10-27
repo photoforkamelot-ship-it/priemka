@@ -70,7 +70,15 @@ def test_update_rules():
 
 def test_batteries_and_statuses():
     o = obj(); o.extras = {"batteries": [{"count": 2, "sections": 12}, {"count": 1, "sections": 7}, {"count": 3, "sections": 4}], "pumps": 6}
-    o.statuses = {"guard": {"state": "bad", "text": "МАГАЗИН НЕ СДАЁТСЯ НА ПУЛЬТ"}, "bread": {"state": "off"}}
+    o.statuses = {"guard": {"state": "bad"}, "bread": {"state": "off"},
+                  "ad_box": {"state": "bad", "deadline": "2026-07-29"}, "alarm": {"count": "3", "note": "1 ДОВЕЗУТ СЕГОДНЯ;"},
+                  "tbo": {"ask": "Сокол Петр Михайлович", "question": "будет ли бак?"}}
+    o.survey = {**(o.survey or {}), "fire_cabinet": False}
     lines = {x["key"]: x for x in letter.status_lines(o)}
     assert lines["batteries"]["text"] == "КОЛИЧЕСТВО БАТАРЕЙ: 2(12 СЕКЦИЙ)+1(7 СЕКЦИЙ)+3(4 СЕКЦИИ)"
-    assert lines["guard"]["color"] == letter.ORANGE and "bread" not in lines and "fire_cabinet" not in lines
+    assert lines["guard"]["color"] == letter.ORANGE and "bread" not in lines
+    assert lines["fire_cabinet"]["text"] == "ПОЖАРНЫЙ ШКАФ, РУКАВА – НЕ ПРЕДУСМОТРЕНЫ;" and lines["fire_cabinet"]["color"] == letter.GREEN
+    assert lines["ad_box"]["text"] == "РЕКЛАМНЫЙ КОРОБ В МАГАЗИНЕ – ОТСУТСТВУЕТ; УСТРАНЕНИЕ 29.07.26;"
+    assert lines["alarm"]["text"] == "ТРЕВОЖНЫЕ КНОПКИ – 3 ШТ – В НАЛИЧИИ, ИСПРАВНЫ; 1 ДОВЕЗУТ СЕГОДНЯ;"
+    assert "@Сокол Петр Михайлович Петр, будет ли бак?" in lines["tbo"]["text"]
+    assert lines["ad_box"]["html"].startswith("РЕКЛАМНЫЙ КОРОБ В МАГАЗИНЕ<b>")

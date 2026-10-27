@@ -349,6 +349,7 @@ class Api:
         return self.get_norms(u, None, None, oid)
 
     def get_checklists(self, u, _d, _b, oid):
+        from .letter import status_lines
         o = self._obj(oid, u)
         from .letter import CHECK, status_lines
         refs = {}
@@ -357,7 +358,8 @@ class Api:
                 refs.setdefault(r.item_ref, []).append({"id": r.id, "author": r.author_name, "status": r.status})
         return _json({"stage1": CHECK["stage1"], "stage2": CHECK["stage2"], "statuses": CHECK["statuses"],
                       "albums": CHECK["photo_albums"], "module2": CHECK["coffee2_module"],
-                      "checks": o.checks, "refs": refs, "state": o.statuses, "extras": o.extras, "survey": norms_mod.survey(o)})
+                      "checks": o.checks, "refs": refs, "state": o.statuses, "extras": o.extras, "survey": norms_mod.survey(o),
+                      "lines": status_lines(o), "people": [p["name"] for p in rm.people_for(o)]})
 
     def put_check(self, u, data, _b, oid):
         o = self._obj(oid, u)
@@ -397,10 +399,18 @@ class Api:
     def put_status(self, u, data, _b, oid):
         o = self._obj(oid, u)
         st = o.statuses.setdefault(data["key"], {})
-        if data.get("state") in ("ok", "bad", "off"):
+        if data.get("state") in ("ok", "na", "bad", "off"):
+            if st.get("state") != data["state"]:
+                st.pop("phrase", None)
             st["state"] = data["state"]
-        if "text" in data:
-            st["text"] = (data["text"] or "").strip()
+        for k in ("phrase", "note", "ask", "question"):
+            if k in data:
+                st[k] = (data[k] or "").strip()
+        if "count" in data:
+            st["count"] = str(data["count"] or "").strip()
+        if "deadline" in data:
+            st["deadline"] = data["deadline"] or ""
+        st["by"] = u.display
         self.store.put(o)
         from .letter import status_lines
         return _json({"statuses": o.statuses, "lines": status_lines(o)})
@@ -408,7 +418,7 @@ class Api:
     def put_extras(self, u, data, _b, oid):
         o = self._obj(oid, u)
         allowed = {"batteries", "pumps", "height_unloading", "height_ramp", "module2", "nochange", "show_received",
-                   "ahch_scan", "measures", "light", "cc_extra", "first_sent"}
+                   "ahch_scan", "measures", "light", "cc_extra", "first_sent", "zh_ok"}
         for k, v in data.items():
             if k in allowed:
                 o.extras[k] = v
@@ -421,14 +431,17 @@ class Api:
         o = self._obj(oid, u)
         from .letter import CHECK
         titles = dict(CHECK["photo_albums"])
+        titles.update({x["key"]: x["subject"].replace("/", " ").strip() for x in CHECK["statuses"] if x.get("photo")})
         if key not in titles:
             raise ValueError("неизвестный альбом")
         img = base64.b64decode(data["image_b64"])
         cnt = o.extras.setdefault("album_count", {})
         cnt[key] = cnt.get(key, 0) + 1
-        path = self.disk.upload(img, o.code, "Фото для письма", f"{titles[key]}_{cnt[key]}.jpg", sub=titles[key])
+        title = titles[key][:60]
+        path = self.disk.upload(img, o.code, "Фото для письма", f"{title}_{cnt[key]}.jpg", sub=title)
         folder = path.rsplit("/", 1)[0]
-        o.extras.setdefault("albums", {})[key] = self.disk.public_url(folder)
+        # одно фото — ссылка на файл, несколько — на папку (открывается галереей)
+        o.extras.setdefault("albums", {})[key] = self.disk.public_url(folder if cnt[key] > 1 else path)
         self.store.put(o)
         return _json({"albums": o.extras["albums"], "count": cnt})
 

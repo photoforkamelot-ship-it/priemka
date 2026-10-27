@@ -595,14 +595,19 @@
     const light = ex.light || {};
     const s = checkStats(C, "s2", C.stage2);
     walkTop(o, id, 2);
-    render(`<div class="note"><b>Замерьте проходы рулеткой</b> по зелёным цифрам на плане. Допуск ±15 см.</div>
+    const ps = (C.state || {}).passes || {}, pst = ps.state || "";
+    render(`<div class="card stc ${pst === "bad" ? "bad" : pst === "ok" ? "ok" : ""}"><b>Ключевые проходы соответствуют планировке?</b>
+        <span class="sub">Одна отметка — строка уйдёт в низ письма: «КЛЮЧЕВЫЕ РАЗМЕРЫ ПРОХОДОВ <b style="color:${pst === "bad" ? "#ED7D31" : "#00B050"}">${pst === "bad" ? "НЕ СООТВЕТСТВУЮТ" : "СООТВЕТСТВУЮТ"} ПЛАНИРОВКЕ</b>»</span>
+        <div class="seg"><button data-pass="ok" class="${pst === "ok" ? "on" : ""}">✓ Соответствуют</button><button data-pass="bad" class="${pst === "bad" ? "on" : ""}">✕ Нет</button></div>
+        ${pst === "bad" ? `<a class="btn small" href="#o/${id}/rnew/2/5" id="passRem">+ замечание о проходе</a>` : ""}</div>
+      <details class="card" ${ms.length ? "open" : ""}><summary><b>Замеры по точкам</b> <span class="sub">— по желанию, если есть сомнения. Допуск ±15 см</span></summary>
       <a class="btn" href="#o/${id}/plan">◎ Поставить точки на плане</a>
-      <div class="card" style="gap:0"><div class="mrow head"><span>ТОЧКА</span><span></span><span>ПЛАН, см</span><span>ФАКТ, см</span></div>
+      <div style="display:grid;gap:0"><div class="mrow head"><span>ТОЧКА</span><span></span><span>ПЛАН, см</span><span>ФАКТ, см</span></div>
         ${ms.map((m, i) => { const d = m.fact !== "" && m.fact != null && m.plan_cm ? +m.fact - +m.plan_cm : null; const bad = d !== null && Math.abs(d) > 15;
           return `<div class="mrow"><span class="pt ${d === null ? "" : bad ? "bad" : "ok"}">${/^[0-9a-f]{12}$/.test(m.plan || "") ? `<a href="#o/${id}/plan/${m.plan}/${m.page || 1}" style="text-decoration:none;color:inherit">◎${i + 1}</a>` : i + 1}</span>
             <span class="${bad ? "badt" : d === null ? "sub" : "okt"}">${d === null ? "не замерено" : bad ? `${d > 0 ? "+" : ""}${d} · <a href="#" data-mrem="${i}">в замечание →</a>` : "✓ в допуске"}</span>
             <input inputmode="numeric" data-m="${i}" data-f="plan_cm" value="${m.plan_cm ?? ""}" placeholder="—"><input inputmode="numeric" data-m="${i}" data-f="fact" value="${m.fact ?? ""}" placeholder="—"></div>`; }).join("")}
-        <button class="small ghost" id="addm" style="margin-top:8px">+ точка</button></div>
+        <button class="small ghost" id="addm" style="margin-top:8px">+ точка</button></div></details>
       ${(light.types || []).length ? `<div class="card" style="gap:0"><span class="title">Световой план · ${esc(light.source || "DIALux")}</span><span class="sub" style="margin-bottom:6px">по плану — из файла; впишите, сколько по факту</span>
         ${light.types.map((t, i) => { const bad = t.fact !== "" && t.fact != null && +t.fact !== +t.count;
           return `<div class="row" style="padding:6px 0;border-top:1px solid var(--line2)"><span style="font-size:13px"><b>${t.count} ×</b> ${esc(t.name)}</span>
@@ -619,6 +624,8 @@
       <a class="btn main" href="#o/${id}/walk/3">Дальше: этап 3 — наличие</a>
       ${fab(`#o/${id}/rnew/2/7`)}`);
     bindZones(id, 2, C, () => stage2(id));
+    $app.querySelectorAll("[data-pass]").forEach((b) => (b.onclick = async () => { await api("PUT", `/api/objects/${id}/statuses`, { key: "passes", state: b.dataset.pass }); toast(b.dataset.pass === "ok" ? "Проходы: соответствуют — в письме" : "Проходы: не соответствуют — оранжевым в письме"); stage2(id); }));
+    const pr = document.getElementById("passRem"); if (pr) pr.onclick = () => { try { sessionStorage.setItem("newRemark", JSON.stringify({ zone: "Торговый зал", section: "equip", text: "Привести ширину прохода в соответствие с планировкой" })); } catch (_) {} };
     const saveM = async () => { await api("PUT", `/api/objects/${id}/extras`, { measures: ms }); };
     $app.querySelectorAll("[data-m]").forEach((inp) => (inp.onchange = async () => { ms[inp.dataset.m][inp.dataset.f] = inp.value.trim(); await saveM(); stage2(id); }));
     document.getElementById("addm").onclick = async () => { ms.push({ plan_cm: "", fact: "" }); await saveM(); stage2(id); };
@@ -678,11 +685,29 @@
           <div class="bottom" style="display:grid;grid-template-columns:1fr 2fr;gap:8px"><button id="markCancel">Отмена</button><button class="main" id="markOk">Подтвердить</button></div>`;
       }
     } else if (S3.tab === "st") {
-      const st = C.state || {};
-      body = `<span class="sub">Зелёным — в порядке, оранжевым — критично исправить. «Нет» — пункт не актуален для помещения, в письмо не идёт.</span>
-        ${C.statuses.filter((x) => !x.needs || C.survey[x.needs]).map((x) => { const cur = st[x.key] || {}, state = cur.state || "ok";
-          return `<div class="card stc ${state}" data-st="${x.key}"><textarea rows="1" data-stt="${x.key}" placeholder="${esc(state === "bad" ? x.bad : x.ok)}">${esc(cur.text || (state === "bad" ? x.bad : x.ok))}</textarea>
-          <div class="seg">${[["ok", "В порядке"], ["bad", "Исправить"], ["off", "Нет"]].map(([v, n]) => `<button data-sv="${v}" class="${state === v ? "on" : ""}">${n}</button>`).join("")}</div></div>`; }).join("")}`;
+      const st = C.state || {}, lines = Object.fromEntries((C.lines || []).map((l) => [l.key, l]));
+      const albums = (C.extras || {}).albums || {}, ac = (C.extras || {}).album_count || {};
+      const people = (C.people || []);
+      body = `<span class="sub">Как в письмах: предмет — чёрным, итог — <b style="color:#00B050">зелёным</b> (в порядке и «не предусмотрено») или <b style="color:#ED7D31">оранжевым</b> с датой устранения. «Убрать» — пункта нет в письме.</span>
+        ${C.statuses.filter((x) => !x.needs || C.survey[x.needs]).map((x) => { const cur = st[x.key] || {};
+          let state = cur.state || (x.na_if_not && C.survey[x.na_if_not] === false ? "na" : "ok");
+          const opts = (state === "off" ? [] : (x[state] || [])), phrase = cur.phrase || opts[0] || "";
+          const custom = phrase && !opts.includes(phrase);
+          const L = lines[x.key];
+          return `<div class="card stc ${state}" data-st="${x.key}">
+            <div class="stprev">${L ? "● " + L.html : `<s>● ${esc(x.subject)}</s> <span class="sub">— не в письме</span>`}</div>
+            <div class="seg">${[["ok", "В порядке"], ...((x.na || []).length ? [["na", "Не предусм."]] : []), ["bad", "Исправить"], ["off", "Убрать"]].map(([v, n]) => `<button data-sv="${v}" class="${state === v ? "on" : ""}">${n}</button>`).join("")}</div>
+            ${state === "off" ? "" : `<div class="chips">${opts.map((o) => `<button class="chip ${o === phrase ? "on" : ""}" data-ph="${esc(o)}">${esc(o)}</button>`).join("")}
+              <input class="chipin ${custom ? "on" : ""}" data-phc placeholder="свой вариант" value="${custom ? esc(phrase) : ""}"></div>
+            <div class="strow">${x.count ? `<label class="f sm">Кол-во, шт<input inputmode="numeric" data-sf="count" value="${esc(cur.count || "")}" placeholder="—"></label>` : ""}
+              ${state === "bad" ? `<label class="f sm">Устранение<input type="date" data-sf="deadline" value="${esc(cur.deadline || "")}"></label>` : ""}
+              ${x.photo ? `<span class="f sm">Фото в письме<span class="row" style="gap:6px"><label class="btn small">📷${albums[x.key] ? " ещё" : ""}<input type="file" accept="image/*" multiple hidden data-album="${x.key}"></label>${albums[x.key] ? `<a class="btn small ghost" href="${esc(albums[x.key])}">открыть (${ac[x.key] || 1})</a>` : ""}</span></span>` : ""}</div>
+            <details class="stmore" ${cur.note || cur.ask ? "open" : ""}><summary>Приписка или вопрос ответственному</summary>
+              <label class="f sm">Приписка после итога<input data-sf="note" value="${esc(cur.note || "")}" placeholder="напр.: 1 ДОВЕЗУТ СЕГОДНЯ"></label>
+              <div class="grid2"><label class="f sm">@ кого спросить<input data-sf="ask" list="stPeople" value="${esc(cur.ask || "")}" placeholder="ФИО"></label>
+              <label class="f sm">Вопрос<input data-sf="question" value="${esc(cur.question || "")}" placeholder="подскажи, пожалуйста, срок устранения"></label></div></details>`}
+          </div>`; }).join("")}
+        <datalist id="stPeople">${people.map((p) => `<option value="${esc(p)}">`).join("")}</datalist>`;
     } else {
       const ex = C.extras || {};
       const bat = ex.batteries || [];
@@ -733,15 +758,17 @@
       };
     }
     $app.querySelectorAll("[data-st]").forEach((card) => {
-      const key = card.dataset.st, ta = card.querySelector("textarea");
-      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }; fit();
-      ta.oninput = fit; ta.onchange = () => api("PUT", `/api/objects/${id}/statuses`, { key, text: ta.value });
-      card.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = async () => {
-        card.className = "card stc " + b.dataset.sv; card.querySelectorAll("[data-sv]").forEach((x) => x.classList.toggle("on", x === b));
-        const it = C.statuses.find((x) => x.key === key); if (it) { ta.value = b.dataset.sv === "bad" ? it.bad : it.ok; fit(); }
-        await api("PUT", `/api/objects/${id}/statuses`, { key, state: b.dataset.sv, text: "" });
-      }));
+      const key = card.dataset.st;
+      const save = async (d) => { try { const r = await api("PUT", `/api/objects/${id}/statuses`, { key, ...d }); C.state = r.statuses; C.lines = r.lines; stage3(id); } catch (e) { toast(e.message); } };
+      card.querySelectorAll("[data-sv]").forEach((b) => (b.onclick = () => save({ state: b.dataset.sv })));
+      card.querySelectorAll("[data-ph]").forEach((b) => (b.onclick = () => save({ state: card.className.split(" ").pop(), phrase: b.dataset.ph })));
+      const pc = card.querySelector("[data-phc]"); if (pc) pc.onchange = () => save({ state: card.className.split(" ").pop(), phrase: pc.value.toUpperCase() });
+      card.querySelectorAll("[data-sf]").forEach((inp) => (inp.onchange = () => save({ state: card.className.split(" ").pop(), [inp.dataset.sf]: inp.dataset.sf === "note" ? inp.value.toUpperCase() : inp.value })));
     });
+    $app.querySelectorAll("[data-album]").forEach((inp) => (inp.onchange = async () => {
+      for (const f of inp.files) { try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/album/${inp.dataset.album}`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); } }
+      toast("Фото на Диске — ссылка встала в письмо"); stage3(id);
+    }));
     const ex = C.extras || {};
     const addb = document.getElementById("addb");
     if (addb) {
@@ -754,10 +781,6 @@
       document.getElementById("hr").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { height_ramp: e.target.value.trim() });
       document.getElementById("ahs").onchange = (e) => api("PUT", `/api/objects/${id}/extras`, { ahch_scan: e.target.value.trim() });
       $app.querySelectorAll("[data-m2]").forEach((c) => (c.onchange = async () => { const m = { ...(ex.module2 || {}) }; m[c.dataset.m2] = c.checked; ex.module2 = m; await api("PUT", `/api/objects/${id}/extras`, { module2: m }); }));
-      $app.querySelectorAll("[data-album]").forEach((inp) => (inp.onchange = async () => {
-        for (const f of inp.files) { try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/album/${inp.dataset.album}`, { image_b64: await shrink(f) }); } catch (e) { toast(e.message); } }
-        toast("Фото на Диске"); stage3(id);
-      }));
     }
   }
 
