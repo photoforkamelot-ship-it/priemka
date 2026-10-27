@@ -1101,6 +1101,8 @@
   }
   const MARK_COLORS = { open: "#dc2626", fixed: "#eab308", accepted: "#16a34a", fixed_on_site: "#16a34a" };
   let PLANMODE = "remark";
+  const PVHINT = { remark: "Два пальца — масштаб · касание — метка замечания", point: "Два пальца — масштаб · касание — контрольная точка",
+    crop: "Обведите пальцем участок для печати · два пальца — масштаб" };
   async function planScreen(id, pid, page) {
     const [o, P] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/plans`)]);
     const plans = P.plans;
@@ -1131,16 +1133,24 @@
       <div id="planEditBox" hidden class="card"><label class="f">Название<input id="pt" value="${esc(plan.title)}"></label>
         <label class="f">Что это<select id="pk">${Object.entries(P.kinds).map(([k, n]) => `<option value="${k}" ${k === plan.kind ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <div class="btns"><button class="small main" id="psave">Сохранить</button><button class="small ghost" id="pdel">Удалить план</button></div></div>
-      ${segHtml("pmode", ["Метка замечания", "Контрольная точка"], PLANMODE === "point" ? "Контрольная точка" : "Метка замечания")}
+      ${segHtml("pmode", ["Замечание", "Точка", "✂ Печать"], PLANMODE === "point" ? "Точка" : PLANMODE === "crop" ? "✂ Печать" : "Замечание")}
+      ${(plan.crops || []).length ? `<div class="chips"><span class="sub">Сохранённые фрагменты:</span>${plan.crops.map((c, i) => `<button class="chip" data-crop="${i}">🖨 ${esc(c.name)}</button>`).join("")}</div>` : ""}
       <div class="planview" id="pv"><div class="stage" id="stage" style="width:${pg.w}px;height:${pg.h}px">
         <img id="pimg" alt="План" draggable="false" style="width:${pg.w}px;height:${pg.h}px">
         ${marks.map((m) => `<button class="pmark" data-rid="${m.rid}" style="left:${m.x * 100}%;top:${m.y * 100}%;--c:${MARK_COLORS[m.status] || "#dc2626"}" title="${esc(m.text)}"></button>`).join("")}
+        <div id="cropBox" hidden></div>
         ${points.map((m) => { const d = m.fact !== "" && m.fact != null && m.plan_cm ? +m.fact - +m.plan_cm : null; return `<button class="ppoint ${d === null ? "" : Math.abs(d) > 15 ? "bad" : "ok"}" data-pi="${m.i}" style="left:${m.x * 100}%;top:${m.y * 100}%">${m.i + 1}</button>`; }).join("")}
-      </div><div class="pv-hint">Два пальца — масштаб · касание — ${PLANMODE === "point" ? "контрольная точка" : "метка замечания"}</div></div>
+      </div><div class="pv-hint">${PVHINT[PLANMODE]}</div></div>
       <div class="legend"><span><i style="background:#dc2626"></i>открыто ${cnt("open")}</span><span><i style="background:#eab308"></i>исправлено ${cnt("fixed")}</span><span><i style="background:#16a34a"></i>принято ${cnt("accepted")}</span></div>
       <div id="sheet" class="sheet" hidden></div>`);
     bindPlanUpload(id);
-    bindSeg("pmode", (v) => { PLANMODE = v === "Контрольная точка" ? "point" : "remark"; document.querySelector(".pv-hint").textContent = "Два пальца — масштаб · касание — " + (PLANMODE === "point" ? "контрольная точка" : "метка замечания"); });
+    bindSeg("pmode", (v) => { PLANMODE = v === "Точка" ? "point" : v === "✂ Печать" ? "crop" : "remark"; document.querySelector(".pv-hint").textContent = PVHINT[PLANMODE];
+      if (PLANMODE !== "crop") document.getElementById("cropBox").hidden = true; });
+    const sendCrop = async (body) => {
+      try { toast("Готовлю листы A4…"); const r = await api("POST", `/api/objects/${id}/plans/${plan.id}/crop`, { ...body, send: true }); toast(`Отправлено в чат с ботом: ${r.pages} лист(а) A4`); }
+      catch (e) { toast(e.message); }
+    };
+    $app.querySelectorAll("[data-crop]").forEach((b) => (b.onclick = () => { const c = plan.crops[+b.dataset.crop]; sendCrop({ page: c.page, box: c.box, sheets: c.sheets, name: c.name }); }));
     const pap = document.getElementById("papply"); if (pap) pap.onclick = async () => { await api("POST", `/api/objects/${id}/plans/${plan.id}/apply`); toast("Подставлено: опрос и световой план (этап 2)"); };
     document.getElementById("planEdit").onclick = () => { const b = document.getElementById("planEditBox"); b.hidden = !b.hidden; };
     document.getElementById("psave").onclick = async () => { await api("PUT", `/api/objects/${id}/plans/${plan.id}`, { title: document.getElementById("pt").value, kind: document.getElementById("pk").value }); toast("Сохранено"); planScreen(id, plan.id, page); };
@@ -1150,6 +1160,20 @@
     try { img.src = await planImage(id, pg.file); } catch (e) { toast(e.message); }
     const sheet = document.getElementById("sheet");
     const showSheet = (html) => { sheet.innerHTML = html + `<button class="small ghost" id="shClose">Закрыть</button>`; sheet.hidden = false; document.getElementById("shClose").onclick = () => (sheet.hidden = true); };
+    const cropBox = document.getElementById("cropBox");
+    const onRect = (b, done) => {
+      const [x0, y0, x1, y1] = [Math.min(b[0], b[2]), Math.min(b[1], b[3]), Math.max(b[0], b[2]), Math.max(b[1], b[3])];
+      Object.assign(cropBox.style, { left: x0 * 100 + "%", top: y0 * 100 + "%", width: (x1 - x0) * 100 + "%", height: (y1 - y0) * 100 + "%" }); cropBox.hidden = false;
+      if (!done) return;
+      if (x1 - x0 < 0.02 || y1 - y0 < 0.02) { cropBox.hidden = true; return toast("Обведите участок пальцем — рамка слишком маленькая"); }
+      showSheet(`<b>Фрагмент на печать</b><span class="sub">Без лишних зон, крупно на листах A4 с перекрытием. Бот пришлёт PDF → «Поделиться» → Kyocera</span>
+        <label class="f">Название (чтобы повторить одной кнопкой)<input id="cpn" placeholder="Касса, Пекарня, Склад…"></label>
+        <label class="f">Листов A4${segHtml("cps", ["Авто", "1", "2", "4", "6"], "Авто")}</label>
+        <label class="tick" style="font-weight:500"><input type="checkbox" id="cpm" checked> С метками замечаний (номера как в письме)</label>
+        <button class="main" id="cpGo">🖨 В чат на печать</button>`);
+      bindSeg("cps");
+      document.getElementById("cpGo").onclick = () => { const s = segVal("cps"); sendCrop({ page, box: [x0, y0, x1, y1], sheets: s === "Авто" ? 0 : +s, marks: document.getElementById("cpm").checked, name: document.getElementById("cpn").value.trim() }).then(() => document.getElementById("cpn").value.trim() && planScreen(id, plan.id, page)); };
+    };
     planViewer(document.getElementById("pv"), document.getElementById("stage"), pg, (x, y) => {
       if (PLANMODE === "point") {
         showSheet(`<b>Контрольная точка ${(o.extras.measures || []).length + 1}</b><span class="sub">Зелёная цифра на плане: проектная ширина прохода и замер рулеткой</span>
@@ -1166,7 +1190,7 @@
         <div class="btns"><button class="main" id="nrB">Стройка</button><button class="main" id="nrE">Оборудование</button></div>`);
       const go2 = (section) => { try { sessionStorage.setItem("newRemark", JSON.stringify({ section, plan_mark: { plan: plan.id, page, x, y } })); } catch (e) {} location.hash = `#o/${id}/rnew/${section === "equip" ? 2 : 1}/0`; };
       document.getElementById("nrB").onclick = () => go2("build"); document.getElementById("nrE").onclick = () => go2("equip");
-    });
+    }, { isCrop: () => PLANMODE === "crop", onRect });
     $app.querySelectorAll(".pmark").forEach((b) => b.addEventListener("click", (e) => {
       e.stopPropagation(); const m = P.marks.find((x) => x.rid === b.dataset.rid);
       showSheet(`<span class="row"><b>${esc(m.zone)} · ${m.section === "equip" ? "оборудование" : "стройка"}</b>${statusChip(m.status) || `<span class="chip bad">открыто</span>`}</span>
@@ -1194,19 +1218,24 @@
       }; });
   }
   /** Масштаб двумя пальцами, перетаскивание, двойное касание — увеличить; одиночное касание — onTap(x, y) в долях листа. */
-  function planViewer(view, stage, pg, onTap) {
+  function planViewer(view, stage, pg, onTap, opt = {}) {
     const st = { s: 1, x: 0, y: 0 };
+    let rect = null;
+    const toPage = (cx, cy) => { const r = view.getBoundingClientRect(); return [Math.min(1, Math.max(0, (cx - r.left - st.x) / st.s / pg.w)), Math.min(1, Math.max(0, (cy - r.top - st.y) / st.s / pg.h))]; };
     const fit = () => { const w = view.clientWidth, h = view.clientHeight; st.s = Math.min(w / pg.w, h / pg.h); st.x = (w - pg.w * st.s) / 2; st.y = (h - pg.h * st.s) / 2; apply(); };
     const apply = () => { stage.style.transform = `translate(${st.x}px,${st.y}px) scale(${st.s})`; stage.style.setProperty("--inv", 1 / st.s); };
     const zoomAt = (cx, cy, k) => { const r = view.getBoundingClientRect(), px = cx - r.left, py = cy - r.top; const ns = Math.min(Math.max(st.s * k, 0.05), 6); st.x = px - (px - st.x) * (ns / st.s); st.y = py - (py - st.y) * (ns / st.s); st.s = ns; apply(); };
     const pts = new Map(); let start = null, moved = false, pinch = null, lastTap = 0;
     view.addEventListener("pointerdown", (e) => { if (e.target.closest(".pmark,.ppoint")) return; view.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, sx: st.x, sy: st.y, t: Date.now() }; moved = false; }
-      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: st.s }; moved = true; } });
+      if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, sx: st.x, sy: st.y, t: Date.now() }; moved = false;
+        if (opt.isCrop && opt.isCrop()) { const p = toPage(e.clientX, e.clientY); rect = [p[0], p[1], p[0], p[1]]; } }
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: st.s }; moved = true; rect = null; } });
     view.addEventListener("pointermove", (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, (pinch.s * d / pinch.d) / st.s); }
+      else if (pts.size === 1 && start && rect) { const p = toPage(e.clientX, e.clientY); rect[2] = p[0]; rect[3] = p[1]; moved = true; opt.onRect(rect, false); }
       else if (pts.size === 1 && start) { const dx = e.clientX - start.x, dy = e.clientY - start.y; if (Math.hypot(dx, dy) > 6) moved = true; if (moved) { st.x = start.sx + dx; st.y = start.sy + dy; apply(); } } });
     const end = (e) => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+      if (rect && pts.size === 0) { const r = rect; rect = null; start = null; if (moved) opt.onRect(r, true); return; }
       if (pts.size === 0 && start && !moved && Date.now() - start.t < 400) {
         const now = Date.now();
         if (now - lastTap < 300) { zoomAt(e.clientX, e.clientY, 2); lastTap = 0; clearTimeout(view.tt); return; }

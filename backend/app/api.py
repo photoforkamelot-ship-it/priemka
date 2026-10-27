@@ -130,6 +130,7 @@ class Api:
             (o + r"/plans/([0-9a-f]{12})", "PUT", self.edit_plan),
             (o + r"/plans/([0-9a-f]{12})/delete", "POST", self.delete_plan),
             (o + r"/plans/([0-9a-f]{12})/apply", "POST", self.apply_plan),
+            (o + r"/plans/([0-9a-f]{12})/crop", "POST", self.crop_plan),
             (o + r"/plan-image/([0-9a-f]{12}_\d+\.jpg)", "GET", self.plan_image),
             (o + r"/remarks", "GET", self.list_remarks),
             (o + r"/remarks", "POST", self.create_remark),
@@ -303,6 +304,7 @@ class Api:
         pid = new_id()
         kind = data.get("kind") or plans_mod.guess_kind(plans_mod.first_text(pdf))
         pages = plans_mod.render(pdf, o.id, pid)
+        plans_mod.save_source(pdf, o.id, pid)
         title = (data.get("title") or "").strip() or plans_mod.KINDS.get(kind, "План")
         parsed = plans_mod.parse_sheet(pdf)
         if parsed["luminaires"]:
@@ -329,6 +331,38 @@ class Api:
                 p[k] = data[k]
         self.store.put(o)
         return self.list_plans(u, None, None, oid)
+
+    def crop_plan(self, u, data, _b, oid, pid):
+        """Фрагмент плана крупно на A4: PDF в ответе или файлом в чат с ботом («На печать»). Рамка сохраняется как зона."""
+        o = self._obj(oid, u)
+        p = next((x for x in o.plans if x["id"] == pid), None)
+        if not p:
+            raise LookupError("план не найден")
+        page = int(data.get("page") or 1)
+        box = tuple(float(v) for v in data["box"])
+        name = (data.get("name") or "").strip()
+        marks = []
+        if data.get("marks", True):
+            for sec, items in rm.numbered(o).items():
+                for n, r in items:
+                    pm = r.plan_mark or {}
+                    if pm.get("plan") == pid and int(pm.get("page") or 1) == page:
+                        marks.append({"x": pm["x"], "y": pm["y"], "n": n, "status": r.status})
+        title = f"{o.code} · {p['title']}" + (f" · {name}" if name else " · фрагмент")
+        pdf = plans_mod.crop_print(o.id, p, page, box, int(data.get("sheets") or 0), marks, title)
+        if name:
+            crops = [c for c in p.setdefault("crops", []) if c.get("name") != name]
+            crops.append({"name": name, "page": page, "box": list(box), "sheets": int(data.get("sheets") or 0)})
+            p["crops"] = crops
+            self.store.put(o)
+        fname = f"plan-{o.code}-{name or 'fragment'}.pdf"
+        if data.get("send"):
+            if not self.sender:
+                raise ValueError("бот не подключён")
+            pages = __import__("pymupdf").open(stream=pdf).page_count
+            self.sender.send_document(u.id, fname, pdf, f"План: {name or 'фрагмент'} — {pages} лист(а) A4, 1 копия, без масштабирования → «Поделиться» → Kyocera Mobile Print")
+            return _json({"sent": True, "pages": pages})
+        return _pdf(pdf, fname)
 
     def apply_plan(self, u, data, _b, oid, pid):
         """«Подставить из файла»: сетки, торцы, кофестанция — в опрос; светильники по типам и аварийные — в световой план этапа 2."""

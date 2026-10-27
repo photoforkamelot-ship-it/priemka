@@ -47,6 +47,96 @@ def render(pdf: bytes, obj_id: str, plan_id: str, max_pages: int = 40) -> list[d
     return pages
 
 
+def save_source(pdf: bytes, obj_id: str, plan_id: str):
+    """Исходный PDF рядом с листами — из него печать фрагментов идёт в векторе, без потери качества."""
+    folder = DATA / obj_id
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{plan_id}.pdf").write_bytes(pdf)
+
+
+def crop_print(obj_id: str, plan: dict, page_n: int, box: tuple[float, float, float, float], sheets: int = 0,
+               marks: list[dict] | None = None, title: str = "") -> bytes:
+    """Фрагмент плана без лишних зон → листы A4 крупно. box — доли листа (x0, y0, x1, y1).
+    sheets: 0 — авто (масштаб ≥ 2× от целого листа, не больше 6 листов), иначе 1/2/4/6.
+    Листы с перекрытием 4 % и подписью «лист i из n», метки замечаний — номерами."""
+    x0, y0, x1, y1 = (min(box[0], box[2]), min(box[1], box[3]), max(box[0], box[2]), max(box[1], box[3]))
+    if x1 - x0 < 0.02 or y1 - y0 < 0.02:
+        raise ValueError("рамка слишком маленькая")
+    src_path = DATA / obj_id / f"{plan['id']}.pdf"
+    out = pymupdf.open()
+    if src_path.exists():
+        src = pymupdf.open(src_path)
+        sp = src[page_n - 1]
+        R = sp.rect
+        vector = True
+    else:   # старые планы: только картинка листа
+        pg = next(x for x in plan["pages"] if x["n"] == page_n)
+        img = page_file(obj_id, pg["file"])
+        R = pymupdf.Rect(0, 0, pg["w"], pg["h"])
+        vector = False
+    crop = pymupdf.Rect(R.x0 + x0 * R.width, R.y0 + y0 * R.height, R.x0 + x1 * R.width, R.y0 + y1 * R.height)
+    land = crop.width > crop.height
+    A4 = (842, 595) if land else (595, 842)
+    M = 22                                    # поля листа
+    usable = (A4[0] - 2 * M, A4[1] - 2 * M - 14)
+    if not sheets:
+        # авто: сколько листов нужно, чтобы фрагмент был не мельче, чем 2× от «целый лист на A4»
+        base = min(usable[0] / R.width, usable[1] / R.height) * 2
+        sheets = 1
+        for n in (1, 2, 4, 6):
+            sheets = n
+            c, r = _grid(n, crop, usable)
+            if min(usable[0] * c / crop.width, usable[1] * r / crop.height) >= base:
+                break
+    cols, rows = _grid(sheets, crop, usable)
+    tw, th = crop.width / cols, crop.height / rows
+    ov = 0.04
+    F = pymupdf.Font("helv")
+    n, total = 0, cols * rows
+    for r in range(rows):
+        for c in range(cols):
+            n += 1
+            tile = pymupdf.Rect(crop.x0 + c * tw - (ov * tw if c else 0), crop.y0 + r * th - (ov * th if r else 0),
+                                crop.x0 + (c + 1) * tw + (ov * tw if c < cols - 1 else 0), crop.y0 + (r + 1) * th + (ov * th if r < rows - 1 else 0))
+            page = out.new_page(width=A4[0], height=A4[1])
+            k = min(usable[0] / tile.width, usable[1] / tile.height)
+            dst = pymupdf.Rect(M, M + 14, M + tile.width * k, M + 14 + tile.height * k)
+            if vector:
+                # растр из вектора под размер листа (~220 dpi): поворот листа PDF учитывается сам
+                z = k * 220 / 72
+                pix = sp.get_pixmap(matrix=pymupdf.Matrix(z, z), clip=tile, alpha=False)
+                page.insert_image(dst, stream=pix.tobytes("jpeg", jpg_quality=85))
+            else:
+                page.insert_image(dst, filename=str(img), clip=tile)
+            page.draw_rect(dst, color=(0.6, 0.6, 0.6), width=0.4)
+            for m in marks or []:
+                mx, my = R.x0 + m["x"] * R.width, R.y0 + m["y"] * R.height
+                if tile.contains(pymupdf.Point(mx, my)):
+                    px, py = dst.x0 + (mx - tile.x0) * k, dst.y0 + (my - tile.y0) * k
+                    col = {"open": (0.86, 0.15, 0.15), "fixed": (0.85, 0.6, 0), "accepted": (0.1, 0.6, 0.3)}.get(m.get("status"), (0.86, 0.15, 0.15))
+                    page.draw_circle((px, py), 7, color=(1, 1, 1), fill=col, width=1)
+                    lab = str(m.get("n", ""))
+                    page.insert_text((px - F.text_length(lab, 7) / 2, py + 2.5), lab, fontsize=7, color=(1, 1, 1))
+            label = f"{title} · лист {n} из {total}" if total > 1 else title
+            _label(page, M, M + 9, label)
+    return out.tobytes(garbage=3, deflate=True)
+
+
+def _grid(n: int, crop, usable) -> tuple[int, int]:
+    """Раскладка n листов: колонки × строки, ближе к пропорциям фрагмента."""
+    opts = [(c, n // c) for c in range(1, n + 1) if n % c == 0]
+    ar = crop.width / crop.height
+    return min(opts, key=lambda cr: abs((ar / cr[0] * cr[1]) - usable[0] / usable[1]))
+
+
+def _label(page, x, y, text):
+    from pathlib import Path as _P
+    f = _P(__file__).resolve().parent / "assets" / "fonts" / "LiberationSans-Regular.ttf"
+    w = pymupdf.TextWriter(page.rect)
+    w.append((x, y), text, font=pymupdf.Font(fontfile=str(f)), fontsize=8)
+    w.write_text(page, color=(0.35, 0.35, 0.35))
+
+
 def first_text(pdf: bytes) -> str:
     doc = pymupdf.open(stream=pdf, filetype="pdf")
     return " ".join(doc[i].get_text() for i in range(min(3, len(doc))))[:4000]
@@ -64,6 +154,7 @@ def page_file(obj_id: str, name: str) -> Path:
 def remove(obj_id: str, plan_id: str):
     for f in (DATA / obj_id).glob(f"{plan_id}_*.jpg"):
         f.unlink(missing_ok=True)
+    (DATA / obj_id / f"{plan_id}.pdf").unlink(missing_ok=True)
 
 
 # ---------- что можно прочитать из PDF без ИИ: таблица DIALux и легенда плана ----------
