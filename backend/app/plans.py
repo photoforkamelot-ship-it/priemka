@@ -108,9 +108,11 @@ def parse_sheet(pdf: bytes) -> dict:
             m = re.search(r, text)
             if m and k not in p:
                 p[k] = m.group(1) if k == "date" else (_num(m.group(1)) if k.startswith(("s_", "cold", "shelves")) else int(m.group(1)))
-        other_ends = sum(int(x) for x in re.findall(r"Торец\s+[«\"].*?[»\"]\s*\*\s*(\d+)", text))
-        if "narrow_ends" in p:
-            p["ends"] = p["narrow_ends"] + other_ends
+        others = [(n.strip(), int(x)) for n, x in re.findall(r"Торец\s+[«\"](.*?)[»\"]\s*\*\s*(\d+)", text)]
+        if "narrow_ends" in p and "ends" not in p:
+            p["ends"] = p["narrow_ends"] + sum(x for _, x in others)
+            parts = [f"{p['narrow_ends']} узких"] + [f"{x} «{n.capitalize()}»" for n, x in others]
+            p["ends_note"] = " + ".join(parts) + f" = {p['ends']}" if others else f"{p['ends']} узких"
         m = re.search(r"Кофестанция\s*\((\d{3,4})\s*[xх×]\s*(\d{3})\)\s*\*\s*(\d+)", text)
         if m and "coffee" not in p:
             p["coffee"] = 2 if int(m.group(1)) >= 1800 else int(m.group(3))     # 1864×650 — двойная кофестанция

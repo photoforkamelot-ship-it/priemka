@@ -383,7 +383,7 @@
       ["Приём на работу", "+ бланки с образцами · «Кадровое делопроизводство»", MEMO + "instr/priem/priem.html"],
       ["Спецодежда на кассе", "после доступа к кассе", MEMO + "instr/forma/forma.html"],
       ["Дворник по договору ГПХ", "объявление, конверт, договор, акт", MEMO + "instr/dvornik/dvornik.html"]]],
-    ["Касса", [["Покупюрник и кассовая дисциплина", "СФО/УФО от 01.07.2026 · ЦФО от 02.07.2025", MEMO + "instr/pokup/pokupyurnik.html"]]],
+    ["Касса", [["Размен: передача ДС через ЯК", "Выдача ДС · ПКО/РКО · первый отчёт 0,01", MEMO + "instr/ds/peredacha-ds.html"], ["Покупюрник и кассовая дисциплина", "СФО/УФО от 01.07.2026 · ЦФО от 02.07.2025", MEMO + "instr/pokup/pokupyurnik.html"]]],
     ["Исходные документы (PDF)", [
       ["Мобильные кадры", "от 19.06.2025", ORIG + "pamyatka-originaly-1/mobilnye-kadry-instrukciya-19.06.2025.pdf"],
       ["Ярче Коммуникации", "от 11.08.2026", ORIG + "pamyatka-originaly-1/yarche-kommunikacii-instrukciya-11.08.2026.pdf"],
@@ -770,10 +770,10 @@
     const num = (k, t, sub) => `<div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><span><b style="font-weight:500">${t}</b><br><span class="sub">${sub}</span></span><span class="qty" data-k="${k}"><button type="button" data-q="-1">−</button><input inputmode="numeric" pattern="[0-9]*" value="${s[k] ?? ""}" placeholder="0"><button type="button" data-q="1">+</button></span></div>`;
     const tog = (k, t) => `<label class="row" style="padding:10px 0;border-top:1px solid var(--line2)"><span>${t}</span><input type="checkbox" data-b="${k}" ${s[k] ? "checked" : ""} style="width:22px;height:22px;accent-color:var(--accent)"></label>`;
     const pas = (o.extras || {}).passport || {};
-    render(`${(pas.discrepancies || []).length || pas.grids != null ? `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px">Из плана Кайтена</b><span class="sub" style="color:var(--fg)">${esc([pas.date && "план от " + pas.date, pas.grids != null && "сетки " + pas.grids, pas.ends != null && "торцы " + pas.ends, pas.coffee && "кофестанция " + (pas.coffee === 2 ? "двойная" : "одна"), pas.cash && "кассы " + pas.cash].filter(Boolean).join(" · "))} — проверьте</span>
+    render(`${(pas.discrepancies || []).length || pas.grids != null ? `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px">Из плана Кайтена</b><span class="sub" style="color:var(--fg)">${esc([pas.date && "план от " + pas.date, pas.grids != null && "сетки " + pas.grids, pas.ends != null && "торцы " + (pas.ends_note || pas.ends), pas.coffee && "кофестанция " + (pas.coffee === 2 ? "двойная" : "одна"), pas.cash && "кассы " + pas.cash].filter(Boolean).join(" · "))} — проверьте</span>
         ${(pas.discrepancies || []).map((d) => `<span class="chip warn" style="white-space:normal">⚠ ${esc(d)}</span>`).join("")}</div>` : ""}
       <div class="card"><span class="title" style="font-size:14px">Кофемашин</span>${segHtml("coffee", ["1 · обычная КС", "2 · двойная КС"], +s.coffee === 2 ? "2 · двойная КС" : "1 · обычная КС")}</div>
-      <div class="card" style="gap:0">${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
+      <div class="card" style="gap:0">${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", (pas.ends_note ? "вместе с торцом «Медицина»: " + pas.ends_note + " · " : "вместе с торцом «Медицина» · ") + "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
       <div class="card" style="gap:0">${tog("fresh", "Фреш-полка и кулинария")}${tog("ramp", "Пандус разгрузки")}${tog("entrance_light", "Подсветка входной группы")}${tog("fire_cabinet", "Пожарный шкаф")}</div>
       <div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px;color:var(--link)">Нормы пересчитаны</b>
         <span class="sub" style="color:var(--fg)">25. Сетка 250×1600 — ${mto[25] ?? "?"}<br>26. Сетка 1100×500 — ${mto[26] ?? "?"}<br>28. Ограничитель 500×60 — ${mto[28] ?? "?"}<br>76. Корзина для белья 40 л — ${mto[76]}<br>Расходники кофе — набор «${+s.coffee === 2 ? "двойная КС" : "одна КС"}»</span></div>
@@ -1004,7 +1004,7 @@
         <button class="small ghost" id="planEdit">⋯</button></div>
       ${plan.parsed && (plan.parsed.luminaires_total || Object.keys(plan.parsed.passport || {}).length) ? (() => { const pr = plan.parsed, pa = pr.passport || {};
         const facts = [pr.luminaires_total ? `светильников ${pr.luminaires_total} (${pr.luminaires.length} типов)` : "", pr.emergency ? `аварийных «А» ${pr.emergency}` : "",
-          pa.cash ? `кассы ${pa.cash}` : "", pa.grids != null ? `сетки ${pa.grids}` : "", pa.ends != null ? `торцы ${pa.ends}` : "", pa.coffee ? `кофестанция ${pa.coffee === 2 ? "двойная" : "одна"}${pa.coffee_size ? " (" + pa.coffee_size + ")" : ""}` : "",
+          pa.cash ? `кассы ${pa.cash}` : "", pa.grids != null ? `сетки ${pa.grids}` : "", pa.ends != null ? `торцы ${pa.ends_note || pa.ends}` : "", pa.coffee ? `кофестанция ${pa.coffee === 2 ? "двойная" : "одна"}${pa.coffee_size ? " (" + pa.coffee_size + ")" : ""}` : "",
           pa.s_hall ? `S зала ${String(pa.s_hall).replace(".", ",")} м²` : ""].filter(Boolean);
         return `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:14px">Прочитано из файла</b><span class="sub" style="color:var(--fg)">${esc(facts.join(" · "))}</span>
           ${(pr.discrepancies || []).map((d) => `<span class="chip warn" style="white-space:normal">⚠ ${esc(d)}</span>`).join("")}
