@@ -342,6 +342,7 @@
       ${don.director_phone ? `<a class="btn small" href="tel:${tel(don.director_phone)}">📞 ${esc(don.director_phone)}</a>` : ""}` : "";
     before(20, `<div class="pform">${pf("trainer", tr, "Тренер по региону")}${pf("ahch_curator", cu, "Куратор АХЧ в регионе")}
       <div class="pfield"><b>Размен — из какого магазина</b><input data-donor value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">${donorH}</div></div>`);
+    if (o.okrug === "ЦФО" && /^М/i.test(o.code || "") && /москв/i.test((o.city || "") + " " + (o.address || ""))) before(5, `<div class="btns"><a class="btn main" href="#o/${id}/check1">Письмо о первом чеке — фото чеков и даты</a></div>`);
     before(21, `<div class="btns"><button class="small" data-print="ahchlist">🖨 Лист готовности на печать</button><a class="btn small ghost" href="#o/${id}/walk/3">Скан — в «Обход → Этап 3»</a></div>`);
     before(21, cu.name || cu.phone ? `<div class="row"><span><b>${esc(cu.name || "Куратор АХЧ")}</b></span>${cu.phone ? `<a class="btn small main" href="tel:${tel(cu.phone)}">📞 Позвонить</a>` : ""}</div>`
       : `<div class="note">Контакт куратора — у тренера по региону. Внесите его в пункте ☎ выше.</div>`);
@@ -961,6 +962,46 @@
     toast(ok ? "Письмо скопировано — вставьте в Outlook" : "Не удалось скопировать — нажмите и удерживайте текст письма");
   }
   const COMMENT_AUTHORS = ["Жихарева Анастасия", "Ахпашев Мурад", "Координатор строительства"];
+  // ---------- Москва: письмо о первых чеках (Сергеевой) ----------
+  let OCR = null;
+  async function ocrDateTime(file) {
+    // распознавание на телефоне, бесплатно: Tesseract.js грузится только при первом использовании
+    if (!OCR) OCR = new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; s.onload = () => res(window.Tesseract); s.onerror = rej; document.head.appendChild(s); });
+    const T = await OCR;
+    const { data } = await T.recognize(file, "eng");
+    const txt = (data.text || "").replace(/[Oo]/g, "0").replace(/[lI|]/g, "1");
+    const d = txt.match(/(\d{2})[.\/-](\d{2})[.\/-](\d{2,4})/), tm = txt.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b(?![.\/-]\d)/);
+    return { date: d ? `${d[1]}.${d[2]}.${d[3].length === 2 ? "20" + d[3] : d[3]}` : "", time: tm ? `${tm[1].padStart(2, "0")}:${tm[2]}` : "" };
+  }
+  async function check1Screen(id) {
+    const [o, C] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/check1`)]);
+    top({ back: [`#o/${id}`, "Подготовка"], cap: objLine(o), title: "Первый чек · Москва" });
+    const rows = C.rows || {};
+    render(`${C.moscow ? "" : `<div class="card warnc"><b>Это письмо — только для Москвы</b><span class="sub">ЦФО, код на «М», адрес в Москве. Для этого объекта не требуется.</span></div>`}
+      <span class="sub">Сфотографируйте первый чек каждой кассы — дата и время распознаются с фото (можно поправить). Фото уйдёт на Диск, ссылка встанет в строку письма, а сам файл придёт в чат с ботом — для вложения.</span>
+      ${Array.from({ length: C.kkm }, (_, i) => i + 1).map((k) => { const x = rows[k] || {};
+        return `<div class="card" data-k="${k}"><div class="row"><b>ККМ ${k}</b>${x.url ? `<a class="chip ok" href="${esc(x.url)}">фото ✓</a>` : `<span class="chip warn">нет фото</span>`}</div>
+          <div class="grid2"><label class="f sm">Дата<input data-f="date" value="${esc(x.date || "")}" placeholder="27.10.2026" inputmode="numeric"></label>
+          <label class="f sm">Время<input data-f="time" value="${esc(x.time || "")}" placeholder="09:02" inputmode="numeric"></label></div>
+          <label class="btn ${x.url ? "" : "main"}">📷 ${x.url ? "Переснять" : "Фото чека"}<input type="file" accept="image/*" hidden data-ck="${k}"></label></div>`; }).join("")}
+      <div class="group">Письмо</div>
+      <div class="sub"><b>Кому:</b> Сергеева Елена &lt;e.sergeeva@ya-retail.ru&gt; · <b>Тема:</b> ${esc(C.subject)}</div>
+      <div class="paper">${C.html}</div>
+      <div class="bottom" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="main" id="c1copy">Скопировать письмо</button><button id="c1mail">Открыть почту</button></div>`);
+    document.getElementById("c1copy").onclick = () => copyHtml(C.html, C.text);
+    document.getElementById("c1mail").onclick = () => { copyHtml(C.html, C.text); setTimeout(() => go(C.mailto), 400); };
+    $app.querySelectorAll("[data-k] [data-f]").forEach((inp) => (inp.onchange = async () => {
+      await api("POST", `/api/objects/${id}/check1`, { kkm: inp.closest("[data-k]").dataset.k, [inp.dataset.f]: inp.value }); check1Screen(id);
+    }));
+    $app.querySelectorAll("[data-ck]").forEach((inp) => (inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return; const k = inp.dataset.ck;
+      let rec = {}; try { toast("Распознаю дату и время…"); rec = await ocrDateTime(f); } catch (e) { toast("Не распознал — впишите вручную"); }
+      try { toast("Загружаю фото…"); await api("POST", `/api/objects/${id}/check1`, { kkm: k, image_b64: await shrink(f), ...(rec.date ? { date: rec.date } : {}), ...(rec.time ? { time: rec.time } : {}) });
+        toast(rec.date || rec.time ? `ККМ ${k}: ${rec.date} ${rec.time} — проверьте` : `ККМ ${k}: фото есть, впишите дату и время`); } catch (e) { toast(e.message); }
+      check1Screen(id);
+    }));
+  }
+
   const MERGE = { on: false, ids: new Set() };
   async function letterScreen(id, mode) {
     const [o, L, rs] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/letter/${mode}`), api("GET", `/api/objects/${id}/remarks`)]);
@@ -1487,6 +1528,7 @@
       if (m && m[2] === "docs") return await docsScreen(m[1]);
       if (m && m[2] === "feedback") return await feedbackScreen(m[1]);
       if (m && m[2] === "ahch") return await ahchScreen(m[1]);
+      if (m && m[2] === "check1") return await check1Screen(m[1]);
       if (m && m[2] === "dvornik") return await dvornikScreen(m[1]);
       if (m && m[2] === "letter") return await letterScreen(m[1], m[3] === "update" ? "update" : "first");
       if (m && m[2] === "walk") { const s = +(m[3] || 1); return await (s === 3 ? stage3 : s === 2 ? stage2 : stage1)(m[1]); }

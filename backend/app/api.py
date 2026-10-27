@@ -147,6 +147,8 @@ class Api:
             (o + r"/remarks/([0-9a-f]{12})/img/(before|fix)(\d+)", "GET", self.remark_img),
             (o + r"/remarks/([0-9a-f]{12})/collage", "POST", self.remark_collage),
             (o + r"/groups", "POST", self.create_group),
+            (o + r"/check1", "GET", self.get_check1),
+            (o + r"/check1", "POST", self.put_check1),
             (o + r"/groups/([0-9a-f]{8})/delete", "POST", self.delete_group),
             (o + r"/remarks/([0-9a-f]{12})/status", "POST", self.remark_status),
             (o + r"/remarks/([0-9a-f]{12})/comment", "POST", self.remark_comment),
@@ -850,6 +852,53 @@ class Api:
             except Exception:
                 pass
         return _json({"remark": asdict(r), "sent": sent})
+
+    # ---------- Москва: письмо о первых пробитых чеках ----------
+    @staticmethod
+    def _is_moscow(o) -> bool:
+        return o.okrug == "ЦФО" and (o.code or "").upper().startswith("М") and "москв" in ((o.city or "") + " " + (o.address or "")).lower()
+
+    def _check1_letter(self, o) -> dict:
+        from .letter import FONT, esc
+        rows = o.extras.get("check1") or {}
+        n = int(norms_mod.survey(o).get("cash") or max([3] + [int(k) for k in rows]))
+        lines_h, lines_t = [], []
+        for i in range(1, n + 1):
+            x = rows.get(str(i)) or {}
+            dt = ", ".join(v for v in (x.get("date", ""), x.get("time", "")) if v) or "дата, время чека"
+            link = f' — <a href="{esc(x["url"])}">фото</a>' if x.get("url") else ""
+            lines_h.append(f"ККМ {i}: {esc(dt)}{link}"); lines_t.append(f"ККМ {i}: {dt}" + (f" — фото: {x['url']}" if x.get("url") else ""))
+        p = lambda s: f'<p style="{FONT};margin:0">{s}</p>'
+        html = "".join([p("Добрый день!"), p("Информация по первым пробитым чекам:")] + [p(x) for x in lines_h] +
+                       [p("Фото чеков — по ссылкам" + (" и во вложении" if any((rows.get(str(i)) or {}).get("url") for i in range(1, n + 1)) else ""))])
+        text = "\n".join(["Добрый день!", "Информация по первым пробитым чекам:"] + lines_t + ["Фото чеков — по ссылкам"])
+        subject = f"{o.code} Первый Чек"
+        to = "e.sergeeva@ya-retail.ru"
+        return {"html": f'<div style="{FONT}">{html}</div>', "text": text, "subject": subject, "to": [["Сергеева Елена", to]],
+                "mailto": texts.mailto(to, subject, "", o.store_email or ""), "rows": rows, "kkm": n, "moscow": self._is_moscow(o)}
+
+    def get_check1(self, u, _d, _b, oid):
+        return _json(self._check1_letter(self._obj(oid, u)))
+
+    def put_check1(self, u, data, _b, oid):
+        """Чек по ККМ: фото → Диск («Первый чек»), дата и время (распознаны на телефоне или вписаны)."""
+        o = self._obj(oid, u)
+        k = str(int(data["kkm"]))
+        row = o.extras.setdefault("check1", {}).setdefault(k, {})
+        for f in ("date", "time"):
+            if f in data:
+                row[f] = (data[f] or "").strip()
+        if data.get("image_b64") and self.disk:
+            img = base64.b64decode(data["image_b64"])
+            path = self.disk.upload(img, o.code, "Первый чек", f"ККМ {k} — первый чек.jpg")
+            row["url"] = self.disk.public_url(path)
+            if self.sender:
+                try:
+                    self.sender.send_document(u.id, f"{o.code} ККМ {k} первый чек.jpg", img, "Фото первого чека — приложите к письму Сергеевой")
+                except Exception:
+                    pass
+        self.store.put(o)
+        return _json(self._check1_letter(o))
 
     def create_group(self, u, data, _b, oid):
         """Объединение пунктов в подпункты: общая формулировка; у подпунктов остаются свои сроки, фото и точки на плане."""
