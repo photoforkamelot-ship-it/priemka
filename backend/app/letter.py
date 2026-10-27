@@ -407,6 +407,9 @@ def status_lines(obj: StoreObject) -> list[dict]:
             continue
         if not cur.get("state") and it.get("na_if_not") and s.get(it["na_if_not"]) is False:
             cur = {**cur, "state": "na"}
+        # электролаборатория: пока отчёт не загружен в «Документы объекта» — по умолчанию оранжевым «ОТСУТСТВУЕТ»
+        if it["key"] == "elab" and not cur.get("state") and not ((obj.extras or {}).get("docs") or {}).get("elab"):
+            cur = {**cur, "state": "bad"}
         state, phrase = status_phrase(it, cur)
         subj = it["subject"]
         url = albums.get(it["key"])

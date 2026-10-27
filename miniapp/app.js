@@ -287,6 +287,7 @@
       <div class="card"><span class="title">Размен — из какого магазина</span><span class="sub">Узнайте у тренера. По коду подтянутся адрес, директор и телефон из справочника</span>
         <input id="donor" value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">
         ${don.code ? `<span class="sub">${esc([don.address, don.director && "директор " + don.director, don.director_phone].filter(Boolean).join(" · ") || "в справочнике не найден")}</span>` : ""}</div>
+      <a class="btn" href="#o/${id}/docs">📁 Документы объекта: электролаборатория, ЭОМ, договоры, лист АХЧ</a>
       <label class="card tick"><input type="checkbox" id="dv" ${o.flags.dvornik_hired ? "checked" : ""}> Дворник оформлен — напоминать про акт в конце месяца</label>
       <div class="card" style="background:var(--accent-soft);border:0"><span class="title" style="font-size:14px">Региональные — ${esc(o.okrug)}</span><span class="sub">${REGIONAL[o.okrug] || ""}</span></div>
       <button id="vcf">Контакты объекта в чат (.vcf)</button>
@@ -344,7 +345,8 @@
     // 14 — договоры: статус и экран договоров вместо шаблона
     const c = o.contracts || {}, got = Object.values(c).filter((x) => x.status === "received").length;
     const tpl = wrap.querySelector("#dogTpl"); if (tpl) { const bb = tpl.nextElementSibling; tpl.remove(); if (bb && bb.classList.contains("btns")) bb.remove(); }
-    before(14, `<div class="row"><span class="chip ${got === 4 ? "ok" : "warn"}">получено ${got} из 4</span><a class="btn main" href="#o/${id}/contracts">Договоры и запрос</a></div>`);
+    before(14, `<div class="row"><span class="chip ${got === 4 ? "ok" : "warn"}">получено ${got} из 4</span><a class="btn main" href="#o/${id}/contracts">Договоры и запрос</a></div>
+      <a class="btn small ghost" href="#o/${id}/docs">📁 Все документы объекта: электролаборатория, ЭОМ, лист АХЧ</a>`);
     // 15 — АХЧ в приложении
     const ah = body(15) && body(15).querySelector('a[href*="instr/ahch"]'); if (ah) { ah.setAttribute("href", `#o/${id}/ahch`); ah.textContent = "Собрать заявку"; }
     // 16 — МОПы: контакт подрядчика в данных
@@ -551,6 +553,23 @@
     };
     const tg2 = document.getElementById("ahToggle");
     if (tg2) tg2.onclick = async () => { await api("POST", `/api/objects/${id}/ahch-scan`, ex.ahch_in_letter !== false ? { remove: true } : { restore: true }); again(); };
+  }
+
+  // ---------- документы объекта: электролаборатория, ЭОМ, договоры, лист АХЧ ----------
+  async function docsScreen(id) {
+    const [o, D] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/docs`)]);
+    top({ back: [`#o/${id}/data`, "Данные"], cap: objLine(o), title: "Документы объекта", extra: `<span class="sub">Архив вне письма. Чего нет — подсвечено. Файлы — на Яндекс Диске в папке объекта</span>` });
+    const row = (s) => { const opt = s.key === "other"; return `<div class="card ${s.url || opt ? "" : "warnc"}" data-doc="${s.key}"><div class="row"><b>${esc(s.title)}</b><span class="chip ${s.url ? "ok" : opt ? "info" : "bad"}">${s.url ? "✓ есть" : opt ? "по желанию" : "нет файла"}</span></div>
+      ${s.url ? `<span class="sub">файлов: ${s.count} · ${fmt(s.date)} · ${esc(s.by || "")}${s.note ? " · " + esc(s.note) : ""}</span>` : ""}
+      ${s.key === "elab" ? `<span class="sub">Пока отчёта нет — в письме «ОТЧЕТ ЭЛЕКТРОЛАБОРАТОРИИ ПРИШЁЛ – ОТСУТСТВУЕТ» оранжевым; формулировку можно поменять в «Обход → Этап 3 → Статусы»</span>` : ""}
+      <div class="btns">${s.url ? `<a class="btn small ghost" href="${esc(s.url)}">Открыть</a>` : ""}<label class="btn small ${s.url ? "" : "main"}">📎 ${s.url ? "Добавить файл" : "Загрузить PDF / фото"}<input type="file" accept="image/*,application/pdf" multiple hidden data-up="${s.key}"></label></div></div>`; };
+    render(`${D.slots.map(row).join("")}
+      <a class="card ${D.contracts.got === D.contracts.total ? "" : "warnc"}" href="#o/${id}/contracts" style="text-decoration:none;color:inherit"><div class="row"><b>Договоры: аренда, ТКО, дезинфекция, ОПС</b><span class="chip ${D.contracts.got === D.contracts.total ? "ok" : "warn"}">${D.contracts.got} из ${D.contracts.total}</span></div><span class="sub">Запрос у менеджера по развитию и загрузка — на экране договоров ›</span></a>
+      <a class="card ${D.ahch.url ? "" : "warnc"}" href="#o/${id}/walk/3" style="text-decoration:none;color:inherit"><div class="row"><b>Лист готовности АХЧ</b><span class="chip ${D.ahch.url ? "ok" : "bad"}">${D.ahch.url ? (D.ahch.updated ? "обновлённый" : "✓ есть") : "нет скана"}</span></div><span class="sub">Печать шаблона и скан — в «Обход → Этап 3» или на экране письма ›</span></a>`);
+    $app.querySelectorAll("[data-up]").forEach((inp) => (inp.onchange = async () => {
+      const files = []; for (const f of inp.files) files.push(/pdf/i.test(f.type) ? { b64: await b64file(f), pdf: true } : { b64: await shrink(f, 2400) });
+      try { toast("Загружаю на Диск…"); await api("POST", `/api/objects/${id}/docs/${inp.dataset.up}`, { files }); toast("Документ на Диске"); docsScreen(id); } catch (e) { toast(e.message); }
+    }));
   }
 
   async function printToChat(id, kind) {
@@ -1242,6 +1261,7 @@
       if (m && m[2] === "plan") return await planScreen(m[1], m[3] || "", +(m[4] || 1));
       if (m && m[2] === "instr") return await instrScreen(m[1]);
       if (m && m[2] === "contracts") return await contractsScreen(m[1]);
+      if (m && m[2] === "docs") return await docsScreen(m[1]);
       if (m && m[2] === "ahch") return await ahchScreen(m[1]);
       if (m && m[2] === "dvornik") return await dvornikScreen(m[1]);
       if (m && m[2] === "letter") return await letterScreen(m[1], m[3] === "update" ? "update" : "first");

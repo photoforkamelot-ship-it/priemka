@@ -119,6 +119,8 @@ class Api:
             (o + r"/pdf/(konvert|dvornik|ahchlist)", "GET", self.get_pdf),
             (o + r"/print/(konvert|dvornik|vcf|ahchlist)", "POST", self.send_to_chat),
             (o + r"/ahch-scan", "POST", self.ahch_scan),
+            (o + r"/docs", "GET", self.get_docs),
+            (o + r"/docs/(elab|eom|other)", "POST", self.upload_doc),
             (o + r"/vcf", "GET", self.get_vcf),
             (o + r"/zones/(\d)", "GET", self.zones),
             (o + r"/zones/(\d)", "POST", self.zone_check),
@@ -525,6 +527,43 @@ class Api:
         if kind == "konvert":
             return _pdf(pdfs.envelope_insert(o), f"konvert-{o.code}.pdf")
         return _pdf(pdfs.dvornik_poster(o), f"dvornik-{o.code}.pdf")
+
+    DOCS = {"elab": "Отчёт электролаборатории", "eom": "ЭОМ (проект электроснабжения)", "other": "Прочие документы"}
+
+    def get_docs(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        docs = o.extras.get("docs") or {}
+        slots = [{"key": k, "title": v, **docs.get(k, {})} for k, v in self.DOCS.items()]
+        c = o.contracts
+        return _json({"slots": slots, "contracts": {"got": sum(x.status == "received" for x in c.values()), "total": len(c)},
+                      "ahch": {"url": o.extras.get("ahch_scan", ""), "updated": bool(o.extras.get("ahch_updated"))}})
+
+    def upload_doc(self, u, data, _b, oid, key):
+        """Документы объекта вне письма: файлы → Диск «Документы/<слот>», публичная ссылка на папку или файл."""
+        if not self.disk:
+            raise ValueError("Яндекс Диск не подключён")
+        o = self._obj(oid, u)
+        docs = o.extras.setdefault("docs", {})
+        if data.get("clear"):
+            docs.pop(key, None)
+            self.store.put(o)
+            return self.get_docs(u, None, None, oid)
+        files = data.get("files") or []
+        if not files:
+            raise ValueError("нет файла")
+        cur = docs.get(key) or {}
+        n0 = int(cur.get("count") or 0)
+        title = self.DOCS[key]
+        paths = []
+        for i, f in enumerate(files, n0 + 1):
+            ext = "pdf" if f.get("pdf") else "jpg"
+            paths.append(self.disk.upload(base64.b64decode(f["b64"]), o.code, "Документы", f"{title}_{i}.{ext}", sub=title))
+        count = n0 + len(paths)
+        target = paths[0] if count == 1 else paths[0].rsplit("/", 1)[0]
+        docs[key] = {"url": self.disk.public_url(target), "count": count, "date": date.today().isoformat(),
+                     "by": u.display, "note": (data.get("note") or cur.get("note") or "").strip()}
+        self.store.put(o)
+        return self.get_docs(u, None, None, oid)
 
     def ahch_scan(self, u, data, _b, oid):
         """Скан или фото заполненного листа готовности → Диск → ссылка в письме. Повторная загрузка — «ОБНОВЛЁННЫЙ ЛИСТ»."""
