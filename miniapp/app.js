@@ -961,6 +961,7 @@
     toast(ok ? "Письмо скопировано — вставьте в Outlook" : "Не удалось скопировать — нажмите и удерживайте текст письма");
   }
   const COMMENT_AUTHORS = ["Жихарева Анастасия", "Ахпашев Мурад", "Координатор строительства"];
+  const MERGE = { on: false, ids: new Set() };
   async function letterScreen(id, mode) {
     const [o, L, rs] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/letter/${mode}`), api("GET", `/api/objects/${id}/remarks`)]);
     const ex = o.extras || {};
@@ -992,8 +993,10 @@
       <label class="tick" style="font-weight:500;font-size:14px"><input type="checkbox" id="noch" ${ex.nochange ? "checked" : ""}> За сутки ничего не изменилось (оранжевая строка «Замечания по строительной части»)</label>` : "";
     render(`${warn.length ? `<div class="card warnc"><b>Проверьте перед отправкой</b><span class="sub">${esc(warn.join(" · "))}</span></div>` : ""}
       ${editor}
-      <div class="group">${mode === "first" ? "Письмо в вёрстке шаблона" : "Апдейт — предпросмотр"}</div>
-      <div class="paper" id="paper">${L.html_app}</div>
+      <div class="row"><div class="group">${mode === "first" ? "Письмо в вёрстке шаблона" : "Апдейт — предпросмотр"}</div><button class="small ghost" id="mergeB">${MERGE.on ? "Отмена" : "Объединить в подпункты"}</button></div>
+      ${MERGE.on ? `<div class="card warnc"><b>Выберите пункты касанием</b><span class="sub">Подпункты сохранят свои сроки, фото и точки на плане; «принято» — по каждому отдельно. Объединить можно только внутри стройки или оборудования.</span>
+        <input id="mergeT" placeholder="Общая формулировка: Исправить оформление зоны радиаторов"><button class="main" id="mergeOk">Объединить (${MERGE.ids.size})</button></div>` : ""}
+      <div class="paper ${MERGE.on ? "merging" : ""}" id="paper">${L.html_app}</div>
       ${mode === "first" || ex.ahch_scan ? ahchHtml(ex) : ""}
       <details class="card"><summary class="title" style="cursor:pointer">Получатели · ${1 + L.cc.length}</summary>
         <span class="sub"><b>Кому:</b> ${L.to.map(([n, e]) => esc(n) + " &lt;" + esc(e) + "&gt;").join(", ")}</span>
@@ -1028,7 +1031,24 @@
         sh.hidden = true; toast("Фото на Диске — ссылка в письме"); letterScreen(id, mode);
       };
     });
-    $app.querySelectorAll("#paper [data-rid]").forEach((el) => (el.onclick = () => (location.hash = `#o/${id}/r/${el.dataset.rid}`)));
+    $app.querySelectorAll("#paper [data-rid]").forEach((el) => {
+      if (MERGE.ids.has(el.dataset.rid)) el.classList.add("msel");
+      el.onclick = () => {
+        if (!MERGE.on) { location.hash = `#o/${id}/r/${el.dataset.rid}`; return; }
+        const k = el.dataset.rid; MERGE.ids.has(k) ? MERGE.ids.delete(k) : MERGE.ids.add(k); el.classList.toggle("msel");
+        document.getElementById("mergeOk").textContent = `Объединить (${MERGE.ids.size})`;
+      };
+    });
+    document.getElementById("mergeB").onclick = () => { MERGE.on = !MERGE.on; MERGE.ids = new Set(); letterScreen(id, mode); };
+    const mok = document.getElementById("mergeOk");
+    if (mok) mok.onclick = async () => {
+      try { await api("POST", `/api/objects/${id}/groups`, { members: [...MERGE.ids], text: document.getElementById("mergeT").value });
+        MERGE.on = false; MERGE.ids = new Set(); toast("Объединено"); letterScreen(id, mode); } catch (e) { toast(e.message); }
+    };
+    $app.querySelectorAll("#paper [data-gid]").forEach((el) => (el.onclick = async () => {
+      if (el.dataset.confirm !== "1") { el.dataset.confirm = "1"; toast("Разъединить подпункты? Коснитесь заголовка ещё раз"); setTimeout(() => (el.dataset.confirm = ""), 3500); return; }
+      await api("POST", `/api/objects/${id}/groups/${el.dataset.gid}/delete`); toast("Подпункты разъединены"); letterScreen(id, mode);
+    }));
     if (mode === "update") {
       document.getElementById("zhy").onclick = async () => { await api("PUT", `/api/objects/${id}/extras`, { zh_ok: today }); letterScreen(id, mode); };
       document.getElementById("zhn").onclick = async () => { await api("PUT", `/api/objects/${id}/extras`, { zh_ok: "" }); letterScreen(id, mode); };

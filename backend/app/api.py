@@ -146,6 +146,8 @@ class Api:
             (o + r"/remarks/([0-9a-f]{12})/photo", "POST", self.remark_photo),
             (o + r"/remarks/([0-9a-f]{12})/img/(before|fix)(\d+)", "GET", self.remark_img),
             (o + r"/remarks/([0-9a-f]{12})/collage", "POST", self.remark_collage),
+            (o + r"/groups", "POST", self.create_group),
+            (o + r"/groups/([0-9a-f]{8})/delete", "POST", self.delete_group),
             (o + r"/remarks/([0-9a-f]{12})/status", "POST", self.remark_status),
             (o + r"/remarks/([0-9a-f]{12})/comment", "POST", self.remark_comment),
         ]
@@ -848,6 +850,30 @@ class Api:
             except Exception:
                 pass
         return _json({"remark": asdict(r), "sent": sent})
+
+    def create_group(self, u, data, _b, oid):
+        """Объединение пунктов в подпункты: общая формулировка; у подпунктов остаются свои сроки, фото и точки на плане."""
+        o = self._obj(oid, u)
+        ids = [x for x in data.get("members", []) if any(r.id == x for r in o.remarks)]
+        text = (data.get("text") or "").strip()
+        if len(ids) < 2:
+            raise ValueError("выберите хотя бы два пункта")
+        if not text:
+            raise ValueError("впишите общую формулировку")
+        secs = {r.section for r in o.remarks if r.id in ids}
+        if len(secs) > 1:
+            raise ValueError("стройку и оборудование объединить нельзя")
+        groups = [g for g in o.extras.get("groups", []) if not set(g["members"]) & set(ids)]
+        groups.append({"id": os.urandom(4).hex(), "text": text, "members": ids, "by": u.display, "when": date.today().isoformat()})
+        o.extras["groups"] = groups
+        self.store.put(o)
+        return _json({"groups": groups})
+
+    def delete_group(self, u, _d, _b, oid, gid):
+        o = self._obj(oid, u)
+        o.extras["groups"] = [g for g in o.extras.get("groups", []) if g["id"] != gid]
+        self.store.put(o)
+        return _json({"groups": o.extras["groups"]})
 
     def remark_status(self, u, data, _b, oid, rid):
         o = self._obj(oid, u)

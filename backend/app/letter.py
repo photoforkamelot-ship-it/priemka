@@ -126,7 +126,7 @@ class Doc:
         self.h, self.a, self.t = [], [], []
 
     def p(self, html: str, text: str, app: str | None = None, indent: bool = False):
-        st = FONT + (";margin:0 0 0 34pt;text-indent:-17pt" if indent else ";margin:0")
+        st = FONT + (";margin:0 0 0 52pt;text-indent:-12pt" if indent == 2 else ";margin:0 0 0 34pt;text-indent:-17pt" if indent else ";margin:0")
         self.h.append(f'<p style="{st}">{html}</p>')
         self.a.append(f'<p style="{st}">{app if app is not None else html}</p>')
         self.t.append(text)
@@ -155,7 +155,7 @@ def photo_link(r: Remark) -> str:
     return r.photos[0].get("url", "")
 
 
-def remark_line(n: int, r: Remark, obj: StoreObject, mode: str) -> tuple[str, str, list[tuple[str, str]]]:
+def remark_line(n: int | None, r: Remark, obj: StoreObject, mode: str) -> tuple[str, str, list[tuple[str, str]]]:
     """Возвращает (html строки пункта, текст, доп. строки [(html, text)] — комментарии и переносы)."""
     text = r.text.strip().rstrip(".;")
     url = photo_link(r)
@@ -212,6 +212,8 @@ def remark_line(n: int, r: Remark, obj: StoreObject, mode: str) -> tuple[str, st
     for c in r.comments:
         col = c.color or comment_color(c.author, obj)
         extra.append((color("– " + esc(c.text), col), "– " + c.text))
+    if n is None:   # подпункт объединённого пункта
+        return f"–&nbsp;{body_h}{tail_h}", f"– {body_t}{tail_t}", extra
     h = f"{n}.&nbsp;&nbsp;&nbsp;{body_h}{tail_h}"
     t = f"{n}. {body_t}{tail_t}"
     return h, t, extra
@@ -237,18 +239,42 @@ def build(obj: StoreObject, mode: str = "first", today: date | None = None) -> d
         rs.sort(key=lambda r: (r.question, order[r.id]))
         return rs
 
+    groups = {g["id"]: g for g in (ex.get("groups") or [])}
+    member = {m: gid for gid, g in groups.items() for m in g.get("members", [])}
+
     def section(title: str, rs: list[Remark]):
         if not rs:
             return False
         doc.head(title + ":")
         doc.blank()
-        for n, r in enumerate(rs, 1):
-            h, t, extra = remark_line(n, r, obj, mode)
+        n, done = 0, set()
+
+        def one(r: Remark, num: int | None):
+            h, t, extra = remark_line(num, r, obj, mode)
             app = f'<span data-rid="{r.id}" style="background:{bg.get(r.author_name, "#fff")};border-radius:3px" title="{esc(r.author_name)}">{h}</span>'
-            doc.p(h, t, app, indent=True)
+            doc.p(h, t, app, indent=2 if num is None else True)
             for eh, et in extra:
-                doc.p(eh, et, indent=True)
-            items.append({"rid": r.id, "n": n, "section": r.section, "author": r.author_name})
+                doc.p(eh, et, indent=2 if num is None else True)
+
+        for r in rs:
+            gid = member.get(r.id)
+            if gid and gid in done:
+                continue
+            n += 1
+            if gid:
+                # объединённый пункт: общая формулировка, ниже подпункты со своими сроками и фото
+                done.add(gid)
+                g = groups[gid]
+                subs = [x for x in rs if member.get(x.id) == gid]
+                head = g.get("text", "").strip().rstrip(".;:")
+                doc.p(f'<span data-gid="{gid}">{n}.&nbsp;&nbsp;&nbsp;{esc(head)}:</span>', f"{n}. {head}:",
+                      f'<span data-gid="{gid}" style="outline:1px dashed #94a3b8;border-radius:3px">{n}.&nbsp;&nbsp;&nbsp;{esc(head)}:</span>', indent=True)
+                for x in subs:
+                    one(x, None)
+                    items.append({"rid": x.id, "n": n, "section": x.section, "author": x.author_name, "group": gid})
+            else:
+                one(r, n)
+                items.append({"rid": r.id, "n": n, "section": r.section, "author": r.author_name})
         doc.blank()
         return True
 
