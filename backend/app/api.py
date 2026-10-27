@@ -119,6 +119,7 @@ class Api:
             (o + r"/plans", "POST", self.upload_plan),
             (o + r"/plans/([0-9a-f]{12})", "PUT", self.edit_plan),
             (o + r"/plans/([0-9a-f]{12})/delete", "POST", self.delete_plan),
+            (o + r"/plans/([0-9a-f]{12})/apply", "POST", self.apply_plan),
             (o + r"/plan-image/([0-9a-f]{12}_\d+\.jpg)", "GET", self.plan_image),
             (o + r"/remarks", "GET", self.list_remarks),
             (o + r"/remarks", "POST", self.create_remark),
@@ -274,7 +275,12 @@ class Api:
         kind = data.get("kind") or plans_mod.guess_kind(plans_mod.first_text(pdf))
         pages = plans_mod.render(pdf, o.id, pid)
         title = (data.get("title") or "").strip() or plans_mod.KINDS.get(kind, "План")
-        plan = {"id": pid, "title": title, "kind": kind, "pages": pages, "uploaded": date.today().isoformat(), "disk_path": ""}
+        parsed = plans_mod.parse_sheet(pdf)
+        if parsed["luminaires"]:
+            kind = data.get("kind") or "light"
+        if not re.search(r"[А-Яа-яЁё]{3}", title) or re.search(r"_{3,}", title):   # имя файла вида «3be6f7b7-____36» — даём понятное
+            title = plans_mod.KINDS.get(kind, "План")
+        plan = {"id": pid, "title": title, "kind": kind, "pages": pages, "uploaded": date.today().isoformat(), "disk_path": "", "parsed": parsed}
         if self.disk:
             try:
                 plan["disk_path"] = self.disk.upload(pdf, o.code, "Планы", f"{title}.pdf")
@@ -292,6 +298,28 @@ class Api:
         for k in ("title", "kind"):
             if data.get(k):
                 p[k] = data[k]
+        self.store.put(o)
+        return self.list_plans(u, None, None, oid)
+
+    def apply_plan(self, u, data, _b, oid, pid):
+        """«Подставить из файла»: сетки, торцы, кофестанция — в опрос; светильники по типам и аварийные — в световой план этапа 2."""
+        o = self._obj(oid, u)
+        p = next((x for x in o.plans if x["id"] == pid), None)
+        if not p or not p.get("parsed"):
+            raise LookupError("в этом плане нечего подставлять")
+        pr = p["parsed"]
+        pas = pr.get("passport", {})
+        for k in ("grids", "ends", "coffee"):
+            if pas.get(k) is not None:
+                o.survey[k] = pas[k]
+        if pr.get("luminaires"):
+            light = dict(o.extras.get("light") or {})
+            facts = {x["name"]: x.get("fact", "") for x in light.get("types", [])}
+            light["types"] = [{**x, "fact": facts.get(x["name"], "")} for x in pr["luminaires"]]
+            light["emergency_plan"] = pr.get("emergency", 0)
+            light["source"] = p["title"]
+            o.extras["light"] = light
+        o.extras["passport"] = {**(o.extras.get("passport") or {}), **pas, "discrepancies": pr.get("discrepancies", [])}
         self.store.put(o)
         return self.list_plans(u, None, None, oid)
 

@@ -603,11 +603,17 @@
             <span class="${bad ? "badt" : d === null ? "sub" : "okt"}">${d === null ? "не замерено" : bad ? `${d > 0 ? "+" : ""}${d} · <a href="#" data-mrem="${i}">в замечание →</a>` : "✓ в допуске"}</span>
             <input inputmode="numeric" data-m="${i}" data-f="plan_cm" value="${m.plan_cm ?? ""}" placeholder="—"><input inputmode="numeric" data-m="${i}" data-f="fact" value="${m.fact ?? ""}" placeholder="—"></div>`; }).join("")}
         <button class="small ghost" id="addm" style="margin-top:8px">+ точка</button></div>
-      <div class="card" style="gap:0"><span class="title">Световой план</span><span class="sub" style="margin-bottom:6px">светильников по плану / по факту, по зонам</span>
+      ${(light.types || []).length ? `<div class="card" style="gap:0"><span class="title">Световой план · ${esc(light.source || "DIALux")}</span><span class="sub" style="margin-bottom:6px">по плану — из файла; впишите, сколько по факту</span>
+        ${light.types.map((t, i) => { const bad = t.fact !== "" && t.fact != null && +t.fact !== +t.count;
+          return `<div class="row" style="padding:6px 0;border-top:1px solid var(--line2)"><span style="font-size:13px"><b>${t.count} ×</b> ${esc(t.name)}</span>
+            <input class="numin ${bad ? "badin" : ""}" inputmode="numeric" data-lt="${i}" value="${t.fact ?? ""}" placeholder="факт"></div>`; }).join("")}
+        <div class="row" style="padding:6px 0;border-top:1px solid var(--line2)"><span style="font-size:13px"><b>${light.emergency_plan || 0} ×</b> аварийные «А»</span>
+          <input class="numin ${light.emergency_fact !== undefined && light.emergency_fact !== "" && +light.emergency_fact !== +(light.emergency_plan || 0) ? "badin" : ""}" inputmode="numeric" id="lem" value="${light.emergency_fact ?? ""}" placeholder="факт"></div></div>` :
+      `<div class="card" style="gap:0"><span class="title">Световой план</span><span class="sub" style="margin-bottom:6px">светильников по плану / по факту, по зонам · загрузите DIALux во вкладке «План» — числа подставятся сами</span>
         ${LIGHT_ZONES.map((z) => { const v = (light.zones || {})[z] || {}; const bad = v.plan !== undefined && v.plan !== "" && v.fact !== undefined && v.fact !== "" && +v.plan !== +v.fact;
           return `<div class="row" style="padding:6px 0;border-top:1px solid var(--line2)"><span style="font-size:14px">${z}</span><span class="row" style="gap:6px">
             <input class="numin" inputmode="numeric" data-lz="${z}" data-lf="plan" value="${v.plan ?? ""}" placeholder="план"><span class="sub">/</span>
-            <input class="numin ${bad ? "badin" : ""}" inputmode="numeric" data-lz="${z}" data-lf="fact" value="${v.fact ?? ""}" placeholder="факт"></span></div>`; }).join("")}</div>
+            <input class="numin ${bad ? "badin" : ""}" inputmode="numeric" data-lz="${z}" data-lf="fact" value="${v.fact ?? ""}" placeholder="факт"></span></div>`; }).join("")}</div>`}
       <div class="row sub"><b style="color:var(--fg)">Оборудование: ${s.done} из ${s.total}</b></div>
       ${zonesHtml(id, 2, "s2", C.stage2.map((z) => z.key === "e3" && +(C.survey.coffee || 1) === 2 ? { ...z, title: "Кофестанция · 2 модуля" } : z), C, rs)}
       <a class="btn main" href="#o/${id}/walk/3">Дальше: этап 3 — наличие</a>
@@ -621,6 +627,12 @@
       try { sessionStorage.setItem("newRemark", JSON.stringify({ zone: "Стеллажка", section: "equip", text: `Проход у точки ${+a.dataset.mrem + 1}: по плану ${m.plan_cm} см, по факту ${m.fact} см — привести в соответствие с планировкой` })); } catch (_) {}
       location.hash = `#o/${id}/rnew/2/5`;
     }));
+    $app.querySelectorAll("[data-lt]").forEach((inp) => (inp.onchange = async () => {
+      const t = light.types[+inp.dataset.lt]; t.fact = inp.value.trim(); await api("PUT", `/api/objects/${id}/extras`, { light });
+      const bad = t.fact !== "" && +t.fact !== +t.count; inp.classList.toggle("badin", bad); if (bad) toast(`${t.name}: по плану ${t.count}, по факту ${t.fact}`, "err");
+    }));
+    const lem = document.getElementById("lem"); if (lem) lem.onchange = async () => { light.emergency_fact = lem.value.trim(); await api("PUT", `/api/objects/${id}/extras`, { light });
+      const bad = light.emergency_fact !== "" && +light.emergency_fact !== +(light.emergency_plan || 0); lem.classList.toggle("badin", bad); if (bad) toast(`Аварийные: по плану ${light.emergency_plan}, по факту ${light.emergency_fact}`, "err"); };
     $app.querySelectorAll("[data-lz]").forEach((inp) => (inp.onchange = async () => {
       const zones = { ...(light.zones || {}) }; zones[inp.dataset.lz] = { ...(zones[inp.dataset.lz] || {}), [inp.dataset.lf]: inp.value.trim() };
       light.zones = zones; await api("PUT", `/api/objects/${id}/extras`, { light: { ...light, zones } });
@@ -757,7 +769,10 @@
     top({ back: [`#o/${id}/walk/1`, "Обход"], cap: objLine(o), title: "Опрос перед приёмкой", extra: `<span class="sub">От ответов считаются нормы недовоза и пункты письма</span>` });
     const num = (k, t, sub) => `<div class="row" style="padding:8px 0;border-top:1px solid var(--line2)"><span><b style="font-weight:500">${t}</b><br><span class="sub">${sub}</span></span><span class="qty" data-k="${k}"><button type="button" data-q="-1">−</button><input inputmode="numeric" pattern="[0-9]*" value="${s[k] ?? ""}" placeholder="0"><button type="button" data-q="1">+</button></span></div>`;
     const tog = (k, t) => `<label class="row" style="padding:10px 0;border-top:1px solid var(--line2)"><span>${t}</span><input type="checkbox" data-b="${k}" ${s[k] ? "checked" : ""} style="width:22px;height:22px;accent-color:var(--accent)"></label>`;
-    render(`<div class="card"><span class="title" style="font-size:14px">Кофемашин</span>${segHtml("coffee", ["1 · обычная КС", "2 · двойная КС"], +s.coffee === 2 ? "2 · двойная КС" : "1 · обычная КС")}</div>
+    const pas = (o.extras || {}).passport || {};
+    render(`${(pas.discrepancies || []).length || pas.grids != null ? `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px">Из плана Кайтена</b><span class="sub" style="color:var(--fg)">${esc([pas.date && "план от " + pas.date, pas.grids != null && "сетки " + pas.grids, pas.ends != null && "торцы " + pas.ends, pas.coffee && "кофестанция " + (pas.coffee === 2 ? "двойная" : "одна"), pas.cash && "кассы " + pas.cash].filter(Boolean).join(" · "))} — проверьте</span>
+        ${(pas.discrepancies || []).map((d) => `<span class="chip warn" style="white-space:normal">⚠ ${esc(d)}</span>`).join("")}</div>` : ""}
+      <div class="card"><span class="title" style="font-size:14px">Кофемашин</span>${segHtml("coffee", ["1 · обычная КС", "2 · двойная КС"], +s.coffee === 2 ? "2 · двойная КС" : "1 · обычная КС")}</div>
       <div class="card" style="gap:0">${num("grids", "Сеток 250×1600", "по плану")}${num("ends", "Торцов", "ограничители 500×60 — по 11")}${num("superstructures", "Суперструктур", "сетки 1100×500 — по 2")}</div>
       <div class="card" style="gap:0">${tog("fresh", "Фреш-полка и кулинария")}${tog("ramp", "Пандус разгрузки")}${tog("entrance_light", "Подсветка входной группы")}${tog("fire_cabinet", "Пожарный шкаф")}</div>
       <div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:13px;color:var(--link)">Нормы пересчитаны</b>
@@ -987,6 +1002,13 @@
       <div class="row">
         ${plan.pages.length > 1 ? `<span class="row" style="gap:6px"><a class="btn small ghost" href="#o/${id}/plan/${plan.id}/${Math.max(1, page - 1)}">‹</a><b>Лист ${page} из ${plan.pages.length}</b><a class="btn small ghost" href="#o/${id}/plan/${plan.id}/${Math.min(plan.pages.length, page + 1)}">›</a></span>` : `<span class="sub">${esc(P.kinds[plan.kind] || "")}</span>`}
         <button class="small ghost" id="planEdit">⋯</button></div>
+      ${plan.parsed && (plan.parsed.luminaires_total || Object.keys(plan.parsed.passport || {}).length) ? (() => { const pr = plan.parsed, pa = pr.passport || {};
+        const facts = [pr.luminaires_total ? `светильников ${pr.luminaires_total} (${pr.luminaires.length} типов)` : "", pr.emergency ? `аварийных «А» ${pr.emergency}` : "",
+          pa.cash ? `кассы ${pa.cash}` : "", pa.grids != null ? `сетки ${pa.grids}` : "", pa.ends != null ? `торцы ${pa.ends}` : "", pa.coffee ? `кофестанция ${pa.coffee === 2 ? "двойная" : "одна"}${pa.coffee_size ? " (" + pa.coffee_size + ")" : ""}` : "",
+          pa.s_hall ? `S зала ${String(pa.s_hall).replace(".", ",")} м²` : ""].filter(Boolean);
+        return `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:14px">Прочитано из файла</b><span class="sub" style="color:var(--fg)">${esc(facts.join(" · "))}</span>
+          ${(pr.discrepancies || []).map((d) => `<span class="chip warn" style="white-space:normal">⚠ ${esc(d)}</span>`).join("")}
+          <button class="small main" id="papply">Подставить в опрос и световой план</button></div>`; })() : ""}
       <div id="planEditBox" hidden class="card"><label class="f">Название<input id="pt" value="${esc(plan.title)}"></label>
         <label class="f">Что это<select id="pk">${Object.entries(P.kinds).map(([k, n]) => `<option value="${k}" ${k === plan.kind ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <div class="btns"><button class="small main" id="psave">Сохранить</button><button class="small ghost" id="pdel">Удалить план</button></div></div>
@@ -1000,6 +1022,7 @@
       <div id="sheet" class="sheet" hidden></div>`);
     bindPlanUpload(id);
     bindSeg("pmode", (v) => { PLANMODE = v === "Контрольная точка" ? "point" : "remark"; document.querySelector(".pv-hint").textContent = "Два пальца — масштаб · касание — " + (PLANMODE === "point" ? "контрольная точка" : "метка замечания"); });
+    const pap = document.getElementById("papply"); if (pap) pap.onclick = async () => { await api("POST", `/api/objects/${id}/plans/${plan.id}/apply`); toast("Подставлено: опрос и световой план (этап 2)"); };
     document.getElementById("planEdit").onclick = () => { const b = document.getElementById("planEditBox"); b.hidden = !b.hidden; };
     document.getElementById("psave").onclick = async () => { await api("PUT", `/api/objects/${id}/plans/${plan.id}`, { title: document.getElementById("pt").value, kind: document.getElementById("pk").value }); toast("Сохранено"); planScreen(id, plan.id, page); };
     const del = document.getElementById("pdel");
