@@ -115,7 +115,7 @@
     requestAnimationFrame(() => document.documentElement.style.setProperty("--topH", $top.offsetHeight + "px"));
   }
   function tabs(id, on) {
-    const t = [["prep", "Подготовка", `#o/${id}`], ["walk", "Обход", `#o/${id}/walk/1`], ["letter", "Письмо", `#o/${id}/letter/first`], ["data", "Данные", `#o/${id}/data`], ["instr", "Инструкции", `#o/${id}/instr`]];
+    const t = [["prep", "Подготовка", `#o/${id}`], ["walk", "Обход", `#o/${id}/walk/1`], ["plan", "План", `#o/${id}/plan`], ["letter", "Письмо", `#o/${id}/letter/first`], ["data", "Данные", `#o/${id}/data`], ["instr", "Инструкции", `#o/${id}/instr`]];
     return `<nav class="tabs">${t.map(([k, n, h]) => `<a href="${h}" class="${k === on ? "on" : ""}">${n}</a>`).join("")}</nav>`;
   }
   const objLine = (o) => `${o.code}${o.city ? " · " + o.city : ""}${o.address ? ", " + o.address : ""}`;
@@ -505,6 +505,7 @@
   // ---------- обход: общие куски ----------
   const ZONES = ["Фасад", "Входная группа", "Тамбур", "Торговый зал", "Касса", "Стеллажка", "Пекарня", "Кофестанция",
     "Санузел", "Кабинет", "Склад", "Разгрузка", "Агрегатная", "Конденсаторная опора"];
+  const LIGHT_ZONES = ["Торговый зал", "Тамбур", "Касса", "Пекарня", "Склад", "Кабинет", "Санузел", "Фасад и вывеска"];
   const STAGES = { 1: ["Этап 1", "Ремонт"], 2: ["Этап 2", "Оборудование"], 3: ["Этап 3", "Наличие"] };
   const initials = (n) => (n || "").split(" ").slice(0, 2).map((x) => x[0] || "").join("").toUpperCase();
   const fab = (href) => `<a class="fab" href="${href}">+ Замечание</a>`;
@@ -595,14 +596,18 @@
     const s = checkStats(C, "s2", C.stage2);
     walkTop(o, id, 2);
     render(`<div class="note"><b>Замерьте проходы рулеткой</b> по зелёным цифрам на плане. Допуск ±15 см.</div>
+      <a class="btn" href="#o/${id}/plan">◎ Поставить точки на плане</a>
       <div class="card" style="gap:0"><div class="mrow head"><span>ТОЧКА</span><span></span><span>ПЛАН, см</span><span>ФАКТ, см</span></div>
-        ${ms.map((m, i) => { const d = m.fact !== "" && m.fact != null && m.plan ? +m.fact - +m.plan : null; const bad = d !== null && Math.abs(d) > 15;
-          return `<div class="mrow"><span class="pt ${d === null ? "" : bad ? "bad" : "ok"}">${i + 1}</span>
+        ${ms.map((m, i) => { const d = m.fact !== "" && m.fact != null && m.plan_cm ? +m.fact - +m.plan_cm : null; const bad = d !== null && Math.abs(d) > 15;
+          return `<div class="mrow"><span class="pt ${d === null ? "" : bad ? "bad" : "ok"}">${/^[0-9a-f]{12}$/.test(m.plan || "") ? `<a href="#o/${id}/plan/${m.plan}/${m.page || 1}" style="text-decoration:none;color:inherit">◎${i + 1}</a>` : i + 1}</span>
             <span class="${bad ? "badt" : d === null ? "sub" : "okt"}">${d === null ? "не замерено" : bad ? `${d > 0 ? "+" : ""}${d} · <a href="#" data-mrem="${i}">в замечание →</a>` : "✓ в допуске"}</span>
-            <input inputmode="numeric" data-m="${i}" data-f="plan" value="${m.plan ?? ""}" placeholder="—"><input inputmode="numeric" data-m="${i}" data-f="fact" value="${m.fact ?? ""}" placeholder="—"></div>`; }).join("")}
+            <input inputmode="numeric" data-m="${i}" data-f="plan_cm" value="${m.plan_cm ?? ""}" placeholder="—"><input inputmode="numeric" data-m="${i}" data-f="fact" value="${m.fact ?? ""}" placeholder="—"></div>`; }).join("")}
         <button class="small ghost" id="addm" style="margin-top:8px">+ точка</button></div>
-      <div class="card" style="flex-direction:row;align-items:center;justify-content:space-between"><span><b>Световой план · зал</b><br><span class="sub">светильников по плану / по факту</span></span>
-        <span class="row" style="gap:6px"><input class="numin" inputmode="numeric" id="lp" value="${light.plan ?? ""}" placeholder="план"><input class="numin" inputmode="numeric" id="lf" value="${light.fact ?? ""}" placeholder="факт"></span></div>
+      <div class="card" style="gap:0"><span class="title">Световой план</span><span class="sub" style="margin-bottom:6px">светильников по плану / по факту, по зонам</span>
+        ${LIGHT_ZONES.map((z) => { const v = (light.zones || {})[z] || {}; const bad = v.plan !== undefined && v.plan !== "" && v.fact !== undefined && v.fact !== "" && +v.plan !== +v.fact;
+          return `<div class="row" style="padding:6px 0;border-top:1px solid var(--line2)"><span style="font-size:14px">${z}</span><span class="row" style="gap:6px">
+            <input class="numin" inputmode="numeric" data-lz="${z}" data-lf="plan" value="${v.plan ?? ""}" placeholder="план"><span class="sub">/</span>
+            <input class="numin ${bad ? "badin" : ""}" inputmode="numeric" data-lz="${z}" data-lf="fact" value="${v.fact ?? ""}" placeholder="факт"></span></div>`; }).join("")}</div>
       <div class="row sub"><b style="color:var(--fg)">Оборудование: ${s.done} из ${s.total}</b></div>
       ${zonesHtml(id, 2, "s2", C.stage2.map((z) => z.key === "e3" && +(C.survey.coffee || 1) === 2 ? { ...z, title: "Кофестанция · 2 модуля" } : z), C, rs)}
       <a class="btn main" href="#o/${id}/walk/3">Дальше: этап 3 — наличие</a>
@@ -610,14 +615,19 @@
     bindZones(id, 2, C, () => stage2(id));
     const saveM = async () => { await api("PUT", `/api/objects/${id}/extras`, { measures: ms }); };
     $app.querySelectorAll("[data-m]").forEach((inp) => (inp.onchange = async () => { ms[inp.dataset.m][inp.dataset.f] = inp.value.trim(); await saveM(); stage2(id); }));
-    document.getElementById("addm").onclick = async () => { ms.push({ plan: "", fact: "" }); await saveM(); stage2(id); };
+    document.getElementById("addm").onclick = async () => { ms.push({ plan_cm: "", fact: "" }); await saveM(); stage2(id); };
     $app.querySelectorAll("[data-mrem]").forEach((a) => (a.onclick = (e) => {
       e.preventDefault(); const m = ms[a.dataset.mrem];
-      try { sessionStorage.setItem("newRemark", JSON.stringify({ zone: "Стеллажка", section: "equip", text: `Проход у точки ${+a.dataset.mrem + 1}: по плану ${m.plan} см, по факту ${m.fact} см — привести в соответствие с планировкой` })); } catch (_) {}
+      try { sessionStorage.setItem("newRemark", JSON.stringify({ zone: "Стеллажка", section: "equip", text: `Проход у точки ${+a.dataset.mrem + 1}: по плану ${m.plan_cm} см, по факту ${m.fact} см — привести в соответствие с планировкой` })); } catch (_) {}
       location.hash = `#o/${id}/rnew/2/5`;
     }));
-    const saveL = async () => api("PUT", `/api/objects/${id}/extras`, { light: { plan: document.getElementById("lp").value, fact: document.getElementById("lf").value } });
-    document.getElementById("lp").onchange = saveL; document.getElementById("lf").onchange = saveL;
+    $app.querySelectorAll("[data-lz]").forEach((inp) => (inp.onchange = async () => {
+      const zones = { ...(light.zones || {}) }; zones[inp.dataset.lz] = { ...(zones[inp.dataset.lz] || {}), [inp.dataset.lf]: inp.value.trim() };
+      light.zones = zones; await api("PUT", `/api/objects/${id}/extras`, { light: { ...light, zones } });
+      const v = zones[inp.dataset.lz]; const row = inp.closest(".row"); const f = row.querySelector('[data-lf="fact"]');
+      f.classList.toggle("badin", v.plan !== undefined && v.plan !== "" && v.fact !== undefined && v.fact !== "" && +v.plan !== +v.fact);
+      if (f.classList.contains("badin")) toast(`${inp.dataset.lz}: по плану ${v.plan}, по факту ${v.fact}`, "err");
+    }));
   }
 
   // ---------- этап 3: недовозы, статусы, батареи, фото ----------
@@ -860,13 +870,14 @@
     let pre = {}; if (!rid) { try { pre = JSON.parse(sessionStorage.getItem("newRemark") || "{}"); sessionStorage.removeItem("newRemark"); } catch (e) {} }
     const r = rid ? all.find((x) => x.id === rid) : { section: pre.section || (stage == 2 ? "equip" : "build"), zone: pre.zone || ZONES[zi] || ZONES[0], text: pre.text || "", phrase: "", deadline: "", deadline_ask: "", deadline_text: "", photos: [], stage, comments: [], deadline_history: [], status: "open", item_ref: pre.item_ref || "" };
     if (!r) throw new Error("замечание не найдено");
-    const back = `#o/${id}/walk/${r.stage || 1}`;
+    const back = pre.plan_mark ? `#o/${id}/plan/${pre.plan_mark.plan}/${pre.plan_mark.page}` : `#o/${id}/walk/${r.stage || 1}`;
     const opt = (sel) => people.map((p) => `<option value="${esc(p.name)}" data-e="${esc(p.email)}" ${p.name === sel ? "selected" : ""}>${esc(p.name)} — ${esc(p.role)}</option>`).join("");
     const iso = (d) => d.toISOString().slice(0, 10), td = new Date(), tm = new Date(td.getTime() + 864e5);
     top({ back: [back, "Обход"], cap: objLine(o), title: rid ? `Замечание №${r.n}` : "Новое замечание" });
     render(`${segHtml("sec", ["Стройка", "Оборудование"], r.section === "equip" ? "Оборудование" : "Стройка")}
       <label class="f">Зона<select id="zone">${ZONES.map((z) => `<option ${z === r.zone ? "selected" : ""}>${z}</option>`).join("")}</select></label>
       ${pre.hint ? `<div class="note">Пункт чек-листа: ${esc(pre.hint)}</div>` : ""}
+      ${(pre.plan_mark || r.plan_mark || {}).plan ? `<a class="chip info" id="onPlan" href="#o/${id}/plan/${(pre.plan_mark || r.plan_mark).plan}/${(pre.plan_mark || r.plan_mark).page || 1}" style="align-self:flex-start">◎ на плане</a>` : rid ? `<a class="chip" href="#o/${id}/plan" style="align-self:flex-start;border:1px solid var(--line)">◎ отметить на плане — откройте «План»</a>` : ""}
       <div class="card"><span class="kicker">Что сделать / где</span><textarea id="text" rows="3" placeholder="Подкрасить плитку армстронг в тамбуре">${esc(r.text)}</textarea>
         <span class="kicker">Ссылка на фото — коснитесь начала и конца фразы</span><div class="words" id="words"></div></div>
       <div class="card"><span class="title">Фото · ${r.photos.length}</span>
@@ -919,6 +930,7 @@
       const body = { section: segVal("sec") === "Оборудование" ? "equip" : "build", zone: document.getElementById("zone").value, stage: r.stage || stage, text: ta.value,
         phrase, deadline: dl, deadline_text: dl ? "" : dt, deadline_ask: dl || dt ? "" : ask.value, question: document.getElementById("q").checked,
         responsible: respSel.value, responsible_email: rs ? rs.dataset.e || "" : "", item_ref: r.item_ref || "" };
+      if (pre.plan_mark) body.plan_mark = pre.plan_mark;
       const rsn = document.getElementById("reason"); if (rsn) body.reason = rsn.value;
       const fos = document.getElementById("fos"); if (fos && fos.checked) body.fixed_on_site = true;
       try {
@@ -943,6 +955,127 @@
         res(c.toDataURL("image/jpeg", 0.82).split(",")[1]); URL.revokeObjectURL(img.src); };
       img.src = URL.createObjectURL(file);
     });
+  }
+
+  // ---------- план магазина: листы, метки замечаний, контрольные точки ----------
+  const IMG = {};
+  async function planImage(id, file) {
+    if (IMG[file]) return IMG[file];
+    const r = await fetch(`/api/objects/${id}/plan-image/${file}`, { headers: { "X-Telegram-Init-Data": tg ? tg.initData : "" } });
+    if (!r.ok) throw new Error("лист не загрузился");
+    return (IMG[file] = URL.createObjectURL(await r.blob()));
+  }
+  const MARK_COLORS = { open: "#dc2626", fixed: "#eab308", accepted: "#16a34a", fixed_on_site: "#16a34a" };
+  let PLANMODE = "remark";
+  async function planScreen(id, pid, page) {
+    const [o, P] = await Promise.all([api("GET", `/api/objects/${id}`), api("GET", `/api/objects/${id}/plans`)]);
+    const plans = P.plans;
+    const plan = plans.find((x) => x.id === pid) || plans[0];
+    top({ back: ["#objects", "Объекты"], cap: objLine(o), title: "План", tabs: [id, "plan"],
+      right: `<label class="btn small main">+ PDF<input type="file" accept="application/pdf" id="planFile" hidden></label>` });
+    if (!plan) {
+      render(`<div class="empty"><b>Планов пока нет</b><span>Загрузите PDF из Кайтена: план монтажа, план категорий, световой план, ТЗ на фасад. DWG сначала сохраните в PDF.</span>
+        <label class="btn main">Загрузить PDF<input type="file" accept="application/pdf" id="planFile2" hidden></label></div>`);
+      bindPlanUpload(id); return;
+    }
+    page = Math.min(Math.max(1, page || 1), plan.pages.length);
+    const pg = plan.pages[page - 1];
+    const marks = P.marks.filter((m) => m.plan === plan.id && m.page === page);
+    const points = P.points.filter((m) => m.plan === plan.id && m.page === page);
+    const cnt = (st) => P.marks.filter((m) => m.plan === plan.id && (st === "accepted" ? ["accepted", "fixed_on_site"].includes(m.status) : m.status === st)).length;
+    render(`<div class="chips">${plans.map((p) => `<a class="chipb ${p.id === plan.id ? "on" : ""}" href="#o/${id}/plan/${p.id}">${esc(p.title)}${p.pages.length > 1 ? " · " + p.pages.length + " л." : ""}</a>`).join("")}</div>
+      <div class="row">
+        ${plan.pages.length > 1 ? `<span class="row" style="gap:6px"><a class="btn small ghost" href="#o/${id}/plan/${plan.id}/${Math.max(1, page - 1)}">‹</a><b>Лист ${page} из ${plan.pages.length}</b><a class="btn small ghost" href="#o/${id}/plan/${plan.id}/${Math.min(plan.pages.length, page + 1)}">›</a></span>` : `<span class="sub">${esc(P.kinds[plan.kind] || "")}</span>`}
+        <button class="small ghost" id="planEdit">⋯</button></div>
+      <div id="planEditBox" hidden class="card"><label class="f">Название<input id="pt" value="${esc(plan.title)}"></label>
+        <label class="f">Что это<select id="pk">${Object.entries(P.kinds).map(([k, n]) => `<option value="${k}" ${k === plan.kind ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <div class="btns"><button class="small main" id="psave">Сохранить</button><button class="small ghost" id="pdel">Удалить план</button></div></div>
+      ${segHtml("pmode", ["Метка замечания", "Контрольная точка"], PLANMODE === "point" ? "Контрольная точка" : "Метка замечания")}
+      <div class="planview" id="pv"><div class="stage" id="stage" style="width:${pg.w}px;height:${pg.h}px">
+        <img id="pimg" alt="План" draggable="false" style="width:${pg.w}px;height:${pg.h}px">
+        ${marks.map((m) => `<button class="pmark" data-rid="${m.rid}" style="left:${m.x * 100}%;top:${m.y * 100}%;--c:${MARK_COLORS[m.status] || "#dc2626"}" title="${esc(m.text)}"></button>`).join("")}
+        ${points.map((m) => { const d = m.fact !== "" && m.fact != null && m.plan_cm ? +m.fact - +m.plan_cm : null; return `<button class="ppoint ${d === null ? "" : Math.abs(d) > 15 ? "bad" : "ok"}" data-pi="${m.i}" style="left:${m.x * 100}%;top:${m.y * 100}%">${m.i + 1}</button>`; }).join("")}
+      </div><div class="pv-hint">Два пальца — масштаб · касание — ${PLANMODE === "point" ? "контрольная точка" : "метка замечания"}</div></div>
+      <div class="legend"><span><i style="background:#dc2626"></i>открыто ${cnt("open")}</span><span><i style="background:#eab308"></i>исправлено ${cnt("fixed")}</span><span><i style="background:#16a34a"></i>принято ${cnt("accepted")}</span></div>
+      <div id="sheet" class="sheet" hidden></div>`);
+    bindPlanUpload(id);
+    bindSeg("pmode", (v) => { PLANMODE = v === "Контрольная точка" ? "point" : "remark"; document.querySelector(".pv-hint").textContent = "Два пальца — масштаб · касание — " + (PLANMODE === "point" ? "контрольная точка" : "метка замечания"); });
+    document.getElementById("planEdit").onclick = () => { const b = document.getElementById("planEditBox"); b.hidden = !b.hidden; };
+    document.getElementById("psave").onclick = async () => { await api("PUT", `/api/objects/${id}/plans/${plan.id}`, { title: document.getElementById("pt").value, kind: document.getElementById("pk").value }); toast("Сохранено"); planScreen(id, plan.id, page); };
+    const del = document.getElementById("pdel");
+    del.onclick = async () => { if (del.dataset.c !== "1") { del.dataset.c = "1"; del.textContent = "Точно удалить? Метки с него снимутся"; return; } await api("POST", `/api/objects/${id}/plans/${plan.id}/delete`); toast("План удалён"); location.hash = `#o/${id}/plan`; };
+    const img = document.getElementById("pimg");
+    try { img.src = await planImage(id, pg.file); } catch (e) { toast(e.message); }
+    const sheet = document.getElementById("sheet");
+    const showSheet = (html) => { sheet.innerHTML = html + `<button class="small ghost" id="shClose">Закрыть</button>`; sheet.hidden = false; document.getElementById("shClose").onclick = () => (sheet.hidden = true); };
+    planViewer(document.getElementById("pv"), document.getElementById("stage"), pg, (x, y) => {
+      if (PLANMODE === "point") {
+        showSheet(`<b>Контрольная точка ${(o.extras.measures || []).length + 1}</b><span class="sub">Зелёная цифра на плане: проектная ширина прохода и замер рулеткой</span>
+          <div class="grid2"><label class="f">По плану, см<input id="ppl" inputmode="numeric"></label><label class="f">Факт, см<input id="pfa" inputmode="numeric"></label></div>
+          <button class="main" id="ppSave">Сохранить точку</button>`);
+        document.getElementById("ppSave").onclick = async () => {
+          const ms = (o.extras.measures || []).slice(); const pl = document.getElementById("ppl").value.trim(), fa = document.getElementById("pfa").value.trim();
+          ms.push({ plan: plan.id, page, x, y, plan_cm: pl, fact: fa }); await api("PUT", `/api/objects/${id}/extras`, { measures: ms });
+          const d = fa && pl ? +fa - +pl : null; toast(d !== null && Math.abs(d) > 15 ? `Отклонение ${d > 0 ? "+" : ""}${d} см — больше допуска` : "Точка сохранена"); planScreen(id, plan.id, page);
+        };
+        return;
+      }
+      showSheet(`<b>Новое замечание в этой точке</b><span class="sub">Зона и текст — на следующем экране</span>
+        <div class="btns"><button class="main" id="nrB">Стройка</button><button class="main" id="nrE">Оборудование</button></div>`);
+      const go2 = (section) => { try { sessionStorage.setItem("newRemark", JSON.stringify({ section, plan_mark: { plan: plan.id, page, x, y } })); } catch (e) {} location.hash = `#o/${id}/rnew/${section === "equip" ? 2 : 1}/0`; };
+      document.getElementById("nrB").onclick = () => go2("build"); document.getElementById("nrE").onclick = () => go2("equip");
+    });
+    $app.querySelectorAll(".pmark").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation(); const m = P.marks.find((x) => x.rid === b.dataset.rid);
+      showSheet(`<span class="row"><b>${esc(m.zone)} · ${m.section === "equip" ? "оборудование" : "стройка"}</b>${statusChip(m.status) || `<span class="chip bad">открыто</span>`}</span>
+        <span>${esc(m.text)}</span><span class="sub">${m.deadline ? "срок " + fmt(m.deadline) : "срок не указан"} · фото: ${m.photos} · ${esc(m.author)}</span>
+        <a class="btn main" href="#o/${id}/r/${m.rid}">Открыть замечание</a>`);
+    }));
+    $app.querySelectorAll(".ppoint").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation(); const m = (o.extras.measures || [])[+b.dataset.pi] || {};
+      const pl = m.plan_cm ?? "", fa = m.fact ?? "", d = fa !== "" && pl !== "" ? +fa - +pl : null;
+      showSheet(`<b>Точка ${+b.dataset.pi + 1}</b><span class="sub">${d === null ? "не замерено" : Math.abs(d) > 15 ? `отклонение ${d > 0 ? "+" : ""}${d} см — больше ±15` : "в допуске"}</span>
+        <div class="grid2"><label class="f">По плану, см<input id="ppl" inputmode="numeric" value="${esc(pl)}"></label><label class="f">Факт, см<input id="pfa" inputmode="numeric" value="${esc(fa)}"></label></div>
+        <div class="btns"><button class="main" id="ppUpd">Сохранить</button>${d !== null && Math.abs(d) > 15 ? `<button id="ppRem">В замечание</button>` : ""}</div>`);
+      document.getElementById("ppUpd").onclick = async () => { const ms = (o.extras.measures || []).slice(); ms[+b.dataset.pi] = { ...m, plan_cm: document.getElementById("ppl").value.trim(), fact: document.getElementById("pfa").value.trim() }; await api("PUT", `/api/objects/${id}/extras`, { measures: ms }); toast("Сохранено"); planScreen(id, plan.id, page); };
+      const rr = document.getElementById("ppRem"); if (rr) rr.onclick = () => { try { sessionStorage.setItem("newRemark", JSON.stringify({ section: "equip", zone: "Стеллажка", plan_mark: { plan: plan.id, page, x: m.x, y: m.y }, text: `Проход у точки ${+b.dataset.pi + 1}: по плану ${pl} см, по факту ${fa} см — привести в соответствие с планировкой` })); } catch (_) {} location.hash = `#o/${id}/rnew/2/5`; };
+    }));
+    const focus = sessionStorage.getItem("planFocus"); if (focus) { sessionStorage.removeItem("planFocus"); const b = $app.querySelector(`.pmark[data-rid="${focus}"]`); if (b) { b.classList.add("pulse"); setTimeout(() => b.click(), 300); } }
+  }
+  function bindPlanUpload(id) {
+    ["planFile", "planFile2"].forEach((fid) => { const inp = document.getElementById(fid); if (!inp) return;
+      inp.onchange = async () => { const f = inp.files[0]; if (!f) return;
+        if (f.size > 22 * 1024 * 1024) return toast("Файл больше 22 МБ — сохраните PDF поменьше");
+        toast("Загружаю план…");
+        const b64 = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result.split(",")[1]); fr.readAsDataURL(f); });
+        try { const P = await api("POST", `/api/objects/${id}/plans`, { file_b64: b64, title: f.name.replace(/\.pdf$/i, "") }); toast("План загружен"); location.hash = `#o/${id}/plan/${P.plans[P.plans.length - 1].id}`; } catch (e) { toast(e.message); }
+      }; });
+  }
+  /** Масштаб двумя пальцами, перетаскивание, двойное касание — увеличить; одиночное касание — onTap(x, y) в долях листа. */
+  function planViewer(view, stage, pg, onTap) {
+    const st = { s: 1, x: 0, y: 0 };
+    const fit = () => { const w = view.clientWidth, h = view.clientHeight; st.s = Math.min(w / pg.w, h / pg.h); st.x = (w - pg.w * st.s) / 2; st.y = (h - pg.h * st.s) / 2; apply(); };
+    const apply = () => { stage.style.transform = `translate(${st.x}px,${st.y}px) scale(${st.s})`; stage.style.setProperty("--inv", 1 / st.s); };
+    const zoomAt = (cx, cy, k) => { const r = view.getBoundingClientRect(), px = cx - r.left, py = cy - r.top; const ns = Math.min(Math.max(st.s * k, 0.05), 6); st.x = px - (px - st.x) * (ns / st.s); st.y = py - (py - st.y) * (ns / st.s); st.s = ns; apply(); };
+    const pts = new Map(); let start = null, moved = false, pinch = null, lastTap = 0;
+    view.addEventListener("pointerdown", (e) => { if (e.target.closest(".pmark,.ppoint")) return; view.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, sx: st.x, sy: st.y, t: Date.now() }; moved = false; }
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: st.s }; moved = true; } });
+    view.addEventListener("pointermove", (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2 && pinch) { const [a, b] = [...pts.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, (pinch.s * d / pinch.d) / st.s); }
+      else if (pts.size === 1 && start) { const dx = e.clientX - start.x, dy = e.clientY - start.y; if (Math.hypot(dx, dy) > 6) moved = true; if (moved) { st.x = start.sx + dx; st.y = start.sy + dy; apply(); } } });
+    const end = (e) => { if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+      if (pts.size === 0 && start && !moved && Date.now() - start.t < 400) {
+        const now = Date.now();
+        if (now - lastTap < 300) { zoomAt(e.clientX, e.clientY, 2); lastTap = 0; clearTimeout(view.tt); return; }
+        lastTap = now; const cx = e.clientX, cy = e.clientY;
+        view.tt = setTimeout(() => { const r = view.getBoundingClientRect(); const x = (cx - r.left - st.x) / st.s / pg.w, y = (cy - r.top - st.y) / st.s / pg.h; if (x >= 0 && x <= 1 && y >= 0 && y <= 1) onTap(+x.toFixed(5), +y.toFixed(5)); }, 280);
+      }
+      if (pts.size === 0) start = null;
+      if (pts.size === 1) { const p = [...pts.values()][0]; start = { x: p.x, y: p.y, sx: st.x, sy: st.y, t: 0 }; } };
+    view.addEventListener("pointerup", end); view.addEventListener("pointercancel", end);
+    view.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
+    requestAnimationFrame(fit);
   }
 
   // ---------- инструкция внутри приложения ----------
@@ -974,6 +1107,7 @@
   async function route() {
     const h = location.hash.replace(/^#/, "") || "objects";
     const m = h.match(/^o\/([0-9a-f]{12})(?:\/(\w+))?(?:\/(\w+))?(?:\/(\d+))?/);
+    if (m && m[2] === "plan" && m[3] && /^\d+$/.test(m[3])) { m[4] = m[3]; m[3] = ""; }
     try {
       if (h.startsWith("doc/")) return docScreen(decodeURIComponent(h.slice(4)));
       if (h === "objects") return await objects();
@@ -982,6 +1116,7 @@
       if (m && !m[2]) return await prep(m[1]);
       if (m && m[2] === "data") return await dataScreen(m[1]);
       if (m && m[2] === "survey") return await surveyScreen(m[1]);
+      if (m && m[2] === "plan") return await planScreen(m[1], m[3] || "", +(m[4] || 1));
       if (m && m[2] === "instr") return await instrScreen(m[1]);
       if (m && m[2] === "contracts") return await contractsScreen(m[1]);
       if (m && m[2] === "ahch") return await ahchScreen(m[1]);

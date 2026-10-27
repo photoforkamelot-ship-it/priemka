@@ -203,3 +203,18 @@ h1{font-size:19px}
 button,.btn,.list > a,a.card,summary{transition:transform .08s ease,box-shadow .15s ease,filter .15s ease}
 button:active,.btn:active,.list > a:active,a.card:active{transform:scale(.97);filter:brightness(1.1);box-shadow:0 0 0 3px color-mix(in oklab,var(--accent) 35%,transparent)}
 summary:active{filter:brightness(.97)}
+
+/* план */
+.planview{position:relative;height:calc(100dvh - var(--topH,0px) - 190px);min-height:320px;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage{position:absolute;left:0;top:0;transform-origin:0 0}
+.stage img{display:block;pointer-events:none}
+.pmark{position:absolute;width:28px;height:28px;min-height:0;padding:0;border-radius:50% 50% 50% 0;background:var(--c);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transform:translate(-50%,-100%) rotate(-45deg) scale(var(--inv,1));transform-origin:50% 100%}
+.pmark.pulse{animation:pulse 1s ease 3}
+@keyframes pulse{50%{box-shadow:0 0 0 12px rgba(220,38,38,.25)}}
+.ppoint{position:absolute;width:30px;height:30px;min-height:0;padding:0;border-radius:15px;background:#fff;color:#16181d;border:3px solid #64748b;font-weight:800;font-size:13px;transform:translate(-50%,-50%) scale(var(--inv,1))}
+.ppoint.ok{border-color:#16a34a;color:#16a34a}.ppoint.bad{border-color:#ea580c;color:#ea580c}
+.pv-hint{position:absolute;left:8px;bottom:8px;background:rgba(22,24,29,.75);color:#fff;font-size:12px;padding:4px 10px;border-radius:999px;pointer-events:none}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--muted)}.legend i{display:inline-block;width:10px;height:10px;border-radius:5px;margin-right:5px}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--card);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;box-shadow:0 -8px 24px rgba(0,0,0,.18);max-width:720px;margin:0 auto}
+a.chipb{text-decoration:none;display:inline-flex;align-items:center}
+.badin{border-color:#ea580c!important;color:#ea580c;background:var(--warn-soft)!important}

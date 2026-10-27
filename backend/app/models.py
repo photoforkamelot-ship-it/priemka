@@ -82,7 +82,8 @@ class Remark:
     accepted_date: str = ""         # когда руководитель поставил «принято»
     fixed_date: str = ""
     item_ref: str = ""
-    folder_url: str = ""            # публичная папка замечания на Диске (когда фото больше одного)              # пункт листа контроля, из которого создано замечание
+    folder_url: str = ""            # публичная папка замечания на Диске (когда фото больше одного)
+    plan_mark: dict = field(default_factory=dict)        # {plan, page, x, y} — точка на плане, x/y в долях 0..1              # пункт листа контроля, из которого создано замечание
     log: list[dict] = field(default_factory=list)          # {who, when, what, before, after}
 
     @property
@@ -122,6 +123,8 @@ class StoreObject:
     statuses: dict = field(default_factory=dict)
     # Прочее для письма: батареи, насосы, высоты, альбомы фото, проходы, свет, лист АХЧ, режимы письма
     extras: dict = field(default_factory=dict)
+    # Планы из Кайтена: [{id, title, kind, pages: [{n, w, h, file}], disk_path, uploaded}]
+    plans: list = field(default_factory=list)
 
     @property
     def full_address(self) -> str:

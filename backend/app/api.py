@@ -13,6 +13,7 @@ from datetime import date
 
 from . import firstday, remarks as rm
 from . import norms as norms_mod
+from . import plans as plans_mod
 from .generators import contracts as gcontracts, pdfs, texts, vcf
 from .models import CONTRACT_SLOTS, Person, StoreObject
 from .storage import Store, new_id
@@ -114,6 +115,11 @@ class Api:
             (o + r"/zones/(\d)", "GET", self.zones),
             (o + r"/zones/(\d)", "POST", self.zone_check),
             (o + r"/people", "GET", self.people),
+            (o + r"/plans", "GET", self.list_plans),
+            (o + r"/plans", "POST", self.upload_plan),
+            (o + r"/plans/([0-9a-f]{12})", "PUT", self.edit_plan),
+            (o + r"/plans/([0-9a-f]{12})/delete", "POST", self.delete_plan),
+            (o + r"/plan-image/([0-9a-f]{12}_\d+\.jpg)", "GET", self.plan_image),
             (o + r"/remarks", "GET", self.list_remarks),
             (o + r"/remarks", "POST", self.create_remark),
             (o + r"/remarks/([0-9a-f]{12})", "PUT", self.update_remark),
@@ -249,6 +255,60 @@ class Api:
         o = self._obj(oid, u)
         return _json({"whatsapp_group": texts.whatsapp_group_name(o), "outlook_signature": texts.outlook_signature(o),
                       "mops": texts.mops_request(o) if o.okrug == "ЦФО" else None})
+
+    # ---------- планы магазина ----------
+    def list_plans(self, u, _d, _b, oid):
+        o = self._obj(oid, u)
+        marks = [{"rid": r.id, "status": r.status, "section": r.section, "text": r.text, "zone": r.zone,
+                  "deadline": r.deadline, "photos": len(r.photos), "author": r.author_name, **r.plan_mark}
+                 for r in o.remarks if r.plan_mark]
+        points = [{"i": i, **m} for i, m in enumerate(o.extras.get("measures", [])) if re.fullmatch(r"[0-9a-f]{12}", str(m.get("plan", "")))]
+        return _json({"plans": o.plans, "marks": marks, "points": points, "kinds": plans_mod.KINDS})
+
+    def upload_plan(self, u, data, _b, oid):
+        o = self._obj(oid, u)
+        pdf = base64.b64decode(data["file_b64"])
+        if not pdf.startswith(b"%PDF"):
+            raise ValueError("нужен PDF (DWG сначала сохраните в PDF)")
+        pid = new_id()
+        kind = data.get("kind") or plans_mod.guess_kind(plans_mod.first_text(pdf))
+        pages = plans_mod.render(pdf, o.id, pid)
+        title = (data.get("title") or "").strip() or plans_mod.KINDS.get(kind, "План")
+        plan = {"id": pid, "title": title, "kind": kind, "pages": pages, "uploaded": date.today().isoformat(), "disk_path": ""}
+        if self.disk:
+            try:
+                plan["disk_path"] = self.disk.upload(pdf, o.code, "Планы", f"{title}.pdf")
+            except Exception:
+                pass
+        o.plans.append(plan)
+        self.store.put(o)
+        return self.list_plans(u, None, None, oid)
+
+    def edit_plan(self, u, data, _b, oid, pid):
+        o = self._obj(oid, u)
+        p = next((x for x in o.plans if x["id"] == pid), None)
+        if not p:
+            raise LookupError("план не найден")
+        for k in ("title", "kind"):
+            if data.get(k):
+                p[k] = data[k]
+        self.store.put(o)
+        return self.list_plans(u, None, None, oid)
+
+    def delete_plan(self, u, _d, _b, oid, pid):
+        o = self._obj(oid, u)
+        o.plans = [x for x in o.plans if x["id"] != pid]
+        for r in o.remarks:
+            if r.plan_mark.get("plan") == pid:
+                r.plan_mark = {}
+        plans_mod.remove(o.id, pid)
+        self.store.put(o)
+        return self.list_plans(u, None, None, oid)
+
+    def plan_image(self, u, _d, _b, oid, name):
+        o = self._obj(oid, u)
+        f = plans_mod.page_file(o.id, name)
+        return 200, {"Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400"}, f.read_bytes()
 
     # ---------- опрос, этапы, недовозы, статусы, письмо ----------
     def put_survey(self, u, data, _b, oid):

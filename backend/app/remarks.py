@@ -39,7 +39,8 @@ def create(obj: StoreObject, data: dict, author_tg: int, author_name: str) -> Re
                responsible=data.get("responsible", ""), responsible_email=data.get("responsible_email", ""),
                question=bool(data.get("question")), author_tg=author_tg, author_name=author_name,
                created=date.today().isoformat(), stage=int(data.get("stage", 1)),
-               deadline_text=(data.get("deadline_text") or "").strip(), item_ref=data.get("item_ref", ""))
+               deadline_text=(data.get("deadline_text") or "").strip(), item_ref=data.get("item_ref", ""),
+               plan_mark=_mark(data.get("plan_mark")))
     r.phrase = (data.get("phrase") or "").strip() or default_phrase(r.text)
     if data.get("fixed_on_site"):
         r.status = "fixed_on_site"
@@ -48,7 +49,18 @@ def create(obj: StoreObject, data: dict, author_tg: int, author_name: str) -> Re
     return r
 
 
+def _mark(m) -> dict:
+    if not m:
+        return {}
+    x, y = float(m["x"]), float(m["y"])
+    if not (0 <= x <= 1 and 0 <= y <= 1):
+        raise ValueError("метка вне плана")
+    return {"plan": str(m["plan"]), "page": int(m.get("page", 1)), "x": round(x, 5), "y": round(y, 5)}
+
+
 def update(r: Remark, data: dict):
+    if "plan_mark" in data:
+        r.plan_mark = _mark(data["plan_mark"])
     for k in ("section", "zone", "text", "phrase", "deadline_ask", "deadline_text", "responsible", "responsible_email"):
         if k in data:
             setattr(r, k, (data[k] or "").strip())
