@@ -46,12 +46,15 @@ THUMBS = Path(os.environ.get("THUMBS_DIR") or Path(__file__).resolve().parent.pa
 _STORES: dict | None = None
 
 
+def _stores_file() -> Path:
+    return Path(os.environ.get("STORES_FILE") or Path(__file__).resolve().parent.parent / "data" / "stores.json")
+
+
 def _stores() -> dict:
     """Справочник магазинов (tools/import_stores.py). Лежит в backend/data/ — в git не попадает."""
     global _STORES
     if _STORES is None:
-        from pathlib import Path
-        f = Path(os.environ.get("STORES_FILE") or Path(__file__).resolve().parent.parent / "data" / "stores.json")
+        f = _stores_file()
         _STORES = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {"stores": [], "email_prefix": {}}
     return _STORES
 
@@ -99,6 +102,8 @@ class Api:
         return [
             (r"/api/objects", "GET", self.list_objects),
             (r"/api/sources", "GET", self.list_sources),
+            (r"/api/stores-info", "GET", self.stores_info),
+            (r"/api/stores-upload", "POST", self.stores_upload),
             (r"/api/sources/(\w+)", "POST", self.replace_source),
             (r"/api/sources/archive/([\w.-]+\.pdf)", "GET", self.source_archive),
             (r"/api/print-file", "POST", self.print_file),
@@ -213,7 +218,7 @@ class Api:
         for k in ("director", "coordinator", "dev_manager", "mops_contractor", "trainer", "ahch_curator"):
             if k in d and isinstance(d[k], dict):
                 setattr(o, k, Person(**{**asdict(getattr(o, k)), **d[k]}))
-        for k in ("razmen_date", "incass_days", "ahch_notified_on"):
+        for k in ("razmen_date", "incass_days", "ahch_notified_on", "printer_ip"):
             if k in d:
                 o.flags[k] = d[k]
         if "razmen_donor" in d:
@@ -509,7 +514,7 @@ class Api:
     def put_extras(self, u, data, _b, oid):
         o = self._obj(oid, u)
         allowed = {"batteries", "pumps", "height_unloading", "height_ramp", "module2", "nochange", "show_received",
-                   "ahch_scan", "measures", "light", "cc_extra", "first_sent", "zh_ok"}
+                   "ahch_scan", "measures", "light", "cc_extra", "first_sent", "zh_ok", "facade_checklist"}
         for k, v in data.items():
             if k in allowed:
                 o.extras[k] = v
@@ -594,6 +599,30 @@ class Api:
     def _is_admin(self, u) -> bool:
         adm = os.environ.get("ADMIN_TG", "")
         return bool(self.dev_user) or (adm and str(u.id) in adm.replace(" ", "").split(","))
+
+    def stores_info(self, u, *_):
+        s = _stores()
+        return _json({"count": len(s.get("stores", [])), "updated": s.get("updated", ""), "admin": self._is_admin(u)})
+
+    def stores_upload(self, u, data, *_):
+        """Справочник магазинов из Excel (выгрузка: Магазин · Адрес · Код · Управляющий · почта · телефон)."""
+        global _STORES
+        if not self._is_admin(u):
+            raise PermissionError("обновлять справочник может только администратор")
+        import importlib.util, tempfile
+        spec = importlib.util.spec_from_file_location("import_stores", Path(__file__).resolve().parent.parent / "tools" / "import_stores.py")
+        mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f:
+            f.write(base64.b64decode(data["file_b64"]))
+        tmp = _stores_file().with_suffix(".new.json")
+        n = mod.main(f.name, str(tmp))
+        os.unlink(f.name)
+        if not n:
+            tmp.unlink(missing_ok=True)
+            raise ValueError("в файле не нашлось магазинов — это точно выгрузка справочника?")
+        tmp.replace(_stores_file())
+        _STORES = None
+        return self.stores_info(u)
 
     def list_sources(self, u, *_):
         from . import sources

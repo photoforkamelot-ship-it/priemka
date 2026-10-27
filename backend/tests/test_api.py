@@ -140,3 +140,21 @@ def test_team_invite_and_log_and_groups():
     call(api, "POST", f"/api/objects/{oid}/team/7/remove")
     st, _ = call(api, "GET", f"/api/objects/{oid}", user_id=7)
     assert st == 404
+
+
+def test_stores_upload(tmp_path, monkeypatch):
+    import openpyxl
+    from app import api as api_mod
+    monkeypatch.setenv("STORES_FILE", str(tmp_path / "stores.json"))
+    monkeypatch.setenv("ADMIN_TG", "1")
+    api_mod._STORES = None
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(["Пермь"])
+    ws.append(["ОСП Пермь", "г. Пермь, ул. Ленина, д. 1", "ПР99", "Иванов Иван Иванович", "pr99@ya-retail.ru", "8-900-111-22-33"])
+    f = tmp_path / "s.xlsx"; wb.save(f)
+    api = Api(MemoryStore(), TOKEN)
+    st, r = call(api, "POST", "/api/stores-upload", {"file_b64": base64.b64encode(f.read_bytes()).decode()})
+    assert st == 200 and r["count"] == 1 and r["updated"]
+    st, _ = call(api, "POST", "/api/stores-upload", {"file_b64": ""}, user_id=2)
+    assert st == 403
+    api_mod._STORES = None

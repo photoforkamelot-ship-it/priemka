@@ -60,8 +60,10 @@ def main(xlsx: str, out: str):
             letters[pre.group(1)][m.group(1).upper()] += 1
     prefix = {k: max(v, key=v.get) for k, v in letters.items()}
     Path(out).parent.mkdir(parents=True, exist_ok=True)
-    Path(out).write_text(json.dumps({"stores": stores, "email_prefix": prefix}, ensure_ascii=False), encoding="utf-8")
+    from datetime import date
+    Path(out).write_text(json.dumps({"stores": stores, "email_prefix": prefix, "updated": date.today().isoformat()}, ensure_ascii=False), encoding="utf-8")
     print(f"магазинов: {len(stores)}, префиксов почты: {len(prefix)} → {out}")
+    return len(stores)
 
 
 if __name__ == "__main__":

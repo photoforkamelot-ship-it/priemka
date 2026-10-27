@@ -353,6 +353,7 @@
       <div class="card"><span class="title">Размен — из какого магазина</span><span class="sub">Узнайте у тренера. По коду подтянутся адрес, директор и телефон из справочника</span>
         <input id="donor" value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">
         ${don.code ? `<span class="sub">${esc([don.address, don.director && "директор " + don.director, don.director_phone].filter(Boolean).join(" · ") || "в справочнике не найден")}</span>` : ""}</div>
+      ${(o.flags || {}).printer_ip ? `<div class="card"><span class="title">Принтер магазина</span><span class="sub">IP: <b>${esc(o.flags.printer_ip)}</b> — для Kyocera Mobile Print (Wi-Fi «yarche_guest»)</span></div>` : ""}
       <a class="btn" href="#o/${id}/docs">📁 Документы объекта: электролаборатория, ЭОМ, договоры, лист АХЧ</a>
       <label class="card tick"><input type="checkbox" id="dv" ${o.flags.dvornik_hired ? "checked" : ""}> Дворник оформлен — напоминать про акт в конце месяца</label>
       <div class="card" style="background:var(--accent-soft);border:0"><span class="title" style="font-size:14px">Региональные — ${esc(o.okrug)}</span><span class="sub">${REGIONAL[o.okrug] || ""}</span></div>
@@ -408,6 +409,12 @@
     before(20, `<div class="pform">${pf("trainer", tr, "Тренер по региону")}${pf("ahch_curator", cu, "Куратор АХЧ в регионе")}
       <div class="pfield"><b>Размен — из какого магазина</b><input data-donor value="${esc(don.code || "")}" placeholder="код магазина, напр. ПР07" style="text-transform:uppercase">${donorH}</div></div>`);
     if (o.okrug === "ЦФО" && /^М/i.test(o.code || "") && /москв/i.test((o.city || "") + " " + (o.address || ""))) before(5, `<div class="btns"><a class="btn main" href="#o/${id}/check1">Письмо о первом чеке — фото чеков и даты</a></div>`);
+    // IP принтера: из IP телефона в «yarche_guest» (+20) — запоминается в объекте
+    const ipIn = wrap.querySelector("#ipIn"), ipOut = wrap.querySelector("#ipOut");
+    if (ipIn) {
+      if ((o.flags || {}).printer_ip) { ipIn.value = o.flags.printer_ip.replace(/\.20$/, ".1"); ipOut.textContent = o.flags.printer_ip; ipOut.insertAdjacentHTML("afterend", ` <span class="chip ok">сохранён в объекте</span>`); }
+      ipIn.addEventListener("change", () => { const p = ipIn.value.trim().split("."); if (p.length === 4 && p.every((x) => /^\d{1,3}$/.test(x))) api("PUT", `/api/objects/${id}`, { printer_ip: p.slice(0, 3).join(".") + ".20" }).then(() => toast("IP принтера сохранён в объекте")).catch(() => {}); });
+    }
     before(4, `<div class="btns"><button class="small" data-print="maxvcf">👥 Участники (.vcf) — в чат</button><a class="btn small ghost" href="#o/${id}/plan">🖼 Иконка группы — из плана (✂ → «Иконка МАХ»)</a></div>`);
     before(21, `<div class="btns"><button class="small" data-print="ahchlist">🖨 Лист готовности на печать</button><a class="btn small ghost" href="#o/${id}/walk/3">Скан — в «Обход → Этап 3»</a></div>`);
     before(21, cu.name || cu.phone ? `<div class="row"><span><b>${esc(cu.name || "Куратор АХЧ")}</b></span>${cu.phone ? `<a class="btn small main" href="tel:${tel(cu.phone)}">📞 Позвонить</a>` : ""}</div>`
@@ -502,6 +509,7 @@
   async function instrScreen(id) {
     let o = null; if (id) o = await api("GET", `/api/objects/${id}`);
     let S = { sources: [], stale: {}, admin: false }; try { S = await api("GET", "/api/sources"); } catch (e) {}
+    let SI = { count: 0, updated: "" }; try { SI = await api("GET", "/api/stores-info"); } catch (e) {}
     top(o ? { back: ["#objects", "Объекты"], cap: objLine(o), title: "Инструкции", tabs: [id, "instr"] } : { back: ["#objects", "Объекты"], title: "Инструкции" });
     const stale = (u) => S.stale[u];
     render(INSTR.map(([g, rows]) => `<div class="group">${g}</div><div class="list">${rows.map(([t2, s, u]) =>
@@ -511,11 +519,16 @@
           <span class="row" style="gap:6px;flex:0 0 auto"><a class="btn small ghost" href="${s.path}">Открыть</a><button class="small ghost" data-pf="${s.path}" aria-label="На печать">🖨</button>
           ${S.admin ? `<label class="btn small ghost">Заменить<input type="file" accept="application/pdf" hidden data-rep="${s.id}"></label>` : ""}</span></div>`).join("")}</div>
       ${S.admin ? `<span class="sub">Замена: загрузите новый PDF — дата версии возьмётся из текста («Версия от …»), старый файл уйдёт в архив, инструкции на его основе получат пометку «источник обновлён — проверить», бот сообщит всем руководителям.</span>` : ""}
+      <div class="group">Справочник магазинов</div><div class="card"><span class="sub">Магазинов: <b>${SI.count}</b>${SI.updated ? ` · справочник объектов обновлён <b>${fmt(SI.updated)}</b>` : ""} — адреса, директора, телефоны, почты для подсказок и размена</span>
+        ${SI.admin ? `<label class="btn small">Загрузить новую выгрузку (Excel)<input type="file" accept=".xlsx" hidden id="storesUp"></label>` : ""}</div>
       <div class="group">Ещё</div><div class="list">
         <a href="${MEMO}index.html"><span class="t"><b>Памятка «Не забывай» целиком</b><span>без привязки к объекту</span></span><span class="go">›</span></a>
         ${o ? `<a href="#o/${id}/ahch"><span class="t"><b>Заявка АХЧ</b><span>16 работ по образцу</span></span><span class="go">›</span></a>` : ""}
         <a href="${MEMO}files/kontakty-otkrytie.vcf"><span class="t"><b>Контакты открытия (.vcf)</b><span>все номера одним файлом</span></span><span class="go">↓</span></a></div>`);
     bindPrintFiles();
+    const su = document.getElementById("storesUp");
+    if (su) su.onchange = async () => { const f = su.files[0]; if (!f) return;
+      try { toast("Загружаю справочник…"); const r = await api("POST", "/api/stores-upload", { file_b64: await b64file(f) }); DIR = null; toast(`Справочник обновлён: ${r.count} магазинов`); instrScreen(id); } catch (e) { toast(e.message); } };
     $app.querySelectorAll("[data-rep]").forEach((inp) => (inp.onchange = async () => {
       const f = inp.files[0]; if (!f) return;
       const version = "";
@@ -761,6 +774,10 @@
   }
 
   // ---------- этап 1: ремонт по зонам листа контроля ----------
+  const GEMINI_PROMPT = "Во вложении — PDF «Техническое задание на оформление фасада» магазина «Ярче!». Выпиши всё, что инженер приёмки должен проверить на объекте: прожекторы, фреймлайты, консоль, решётки и корзины кондиционеров, шторы/рольставни, фоновку (плёнку), цвета RAL, вывеску (логотип, ПКД) и режим её работы, подсветку окон и дверей, размеры, высоты и количество. Ответ — только список, каждый пункт с новой строки: «ЭЛЕМЕНТ — что проверить (кол-во, RAL, размер)». Без вступления и выводов.";
+  function parseGemini(txt) {
+    return (txt || "").split(/\n+/).map((l) => l.replace(/^\s*(?:[-*•–]|\d+[.)])\s*/, "").replace(/\*\*/g, "").trim()).filter((l) => l.length > 3 && !/^(вот|ниже|список|итог)/i.test(l)).slice(0, 60);
+  }
   async function stage1(id) {
     const { o, C, rs } = await loadWalk(id);
     const s = checkStats(C, "s1", C.stage1);
@@ -770,9 +787,18 @@
       <div class="bar"><i style="width:${(s.done / s.total) * 100}%"></i></div>
       <span class="sub">Касание пункта — «в порядке» ✓ (повторное — снять). «+ замеч.» — замечание по пункту. Непроверенные подсвечены.</span>
       ${zonesHtml(id, 1, "s1", C.stage1, C, rs)}
+      ${(() => { const F = (C.extras || {}).facade_checklist || []; if (!F.length) return "";
+        const done = F.filter((x) => x.ok !== null && x.ok !== undefined).length;
+        return `<details class="zone ${done < F.length ? "todo" : ""}" ${done < F.length ? "open" : ""}><summary><span class="st"><b>Фасад по ТЗ</b><span>${done} из ${F.length} пунктов · из ТЗ на фасад (Gemini)</span></span>${done < F.length ? `<span class="chev">▾</span>` : `<span class="okdot">✓</span>`}</summary>
+          <div class="items">${F.map((x, i) => `<div class="it ${x.ok === true ? "ok" : x.ok === false ? "bad" : "un"}"><button class="mark" data-fc="${i}">${x.ok === true ? "✓" : x.ok === false ? "!" : ""}</button><span class="txt" data-fc="${i}">${esc(x.text)}</span>
+            <button class="addr" data-fcr="${i}">+ замеч.</button></div>`).join("")}</div></details>`; })()}
       ${s.total - s.done ? "" : `<a class="btn main" href="#o/${id}/walk/2">Дальше: этап 2 — оборудование</a>`}
       ${fab(`#o/${id}/rnew/1/0`)}`);
     bindZones(id, 1, C, () => stage1(id));
+    const F = (C.extras || {}).facade_checklist || [];
+    $app.querySelectorAll("[data-fc]").forEach((b) => (b.onclick = async () => { const x = F[+b.dataset.fc]; x.ok = x.ok === true ? null : true; await api("PUT", `/api/objects/${id}/extras`, { facade_checklist: F }); stage1(id); }));
+    $app.querySelectorAll("[data-fcr]").forEach((b) => (b.onclick = async () => { const x = F[+b.dataset.fcr]; x.ok = false; await api("PUT", `/api/objects/${id}/extras`, { facade_checklist: F }).catch(() => {});
+      try { sessionStorage.setItem("newRemark", JSON.stringify({ zone: "Фасад", section: "build", hint: x.text })); } catch (e) {} location.hash = `#o/${id}/rnew/1/0`; }));
   }
   function surveyBanner(o, C, id) {
     const sv = C.survey || {};
@@ -1451,6 +1477,10 @@
         return `<div class="card" style="background:var(--accent-soft);border:0"><b style="font-size:14px">Прочитано из файла</b><span class="sub" style="color:var(--fg)">${esc(facts.join(" · "))}</span>
           ${(pr.discrepancies || []).map((d) => `<span class="chip warn" style="white-space:normal">⚠ ${esc(d)}</span>`).join("")}
           <button class="small main" id="papply">Подставить в опрос и световой план</button></div>`; })() : ""}
+      ${plan.kind === "facade" ? `<details class="card" ${(o.extras.facade_checklist || []).length ? "" : "open"}><summary class="title" style="cursor:pointer">Чек-лист фасада через Gemini${(o.extras.facade_checklist || []).length ? ` · ${o.extras.facade_checklist.length} пунктов` : ""}</summary>
+        <span class="sub">Gemini API из России не работает, поэтому через приложение Gemini: 1) скопируйте запрос, 2) откройте Gemini, приложите этот PDF и вставьте запрос, 3) скопируйте ответ сюда. Пункты появятся в «Обход → Этап 1 → Фасад по ТЗ».</span>
+        <div class="btns"><button class="small" id="gmCopy">1. Скопировать запрос</button><button class="small" id="gmOpen">2. Открыть Gemini</button></div>
+        <textarea id="gmAns" rows="5" placeholder="3. Вставьте ответ Gemini"></textarea><button class="small main" id="gmSave">Разобрать и сохранить</button></details>` : ""}
       <div id="planEditBox" hidden class="card"><label class="f">Название<input id="pt" value="${esc(plan.title)}"></label>
         <label class="f">Что это<select id="pk">${Object.entries(P.kinds).map(([k, n]) => `<option value="${k}" ${k === plan.kind ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <div class="btns"><button class="small main" id="psave">Сохранить</button><button class="small ghost" id="pdel">Удалить план</button></div></div>
@@ -1472,6 +1502,14 @@
       catch (e) { toast(e.message); }
     };
     $app.querySelectorAll("[data-crop]").forEach((b) => (b.onclick = () => { const c = plan.crops[+b.dataset.crop]; sendCrop({ page: c.page, box: c.box, sheets: c.sheets, name: c.name }); }));
+    const gmc = document.getElementById("gmCopy"); if (gmc) {
+      gmc.onclick = () => copy(GEMINI_PROMPT);
+      document.getElementById("gmOpen").onclick = () => go("https://gemini.google.com/app");
+      document.getElementById("gmSave").onclick = async () => { const items = parseGemini(document.getElementById("gmAns").value);
+        if (!items.length) return toast("Не нашёл пунктов — вставьте ответ Gemini целиком");
+        const old = Object.fromEntries((o.extras.facade_checklist || []).map((x) => [x.text, x.ok]));
+        await api("PUT", `/api/objects/${id}/extras`, { facade_checklist: items.map((x) => ({ text: x, ok: old[x] ?? null })) }); toast(`Фасад по ТЗ: ${items.length} пунктов — в обходе`); planScreen(id, plan.id, page); };
+    }
     const pap = document.getElementById("papply"); if (pap) pap.onclick = async () => { await api("POST", `/api/objects/${id}/plans/${plan.id}/apply`); toast("Подставлено: опрос и световой план (этап 2)"); };
     document.getElementById("planEdit").onclick = () => { const b = document.getElementById("planEditBox"); b.hidden = !b.hidden; };
     document.getElementById("psave").onclick = async () => { await api("PUT", `/api/objects/${id}/plans/${plan.id}`, { title: document.getElementById("pt").value, kind: document.getElementById("pk").value }); toast("Сохранено"); planScreen(id, plan.id, page); };
